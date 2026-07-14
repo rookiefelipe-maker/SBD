@@ -88,6 +88,14 @@
   .week-row .val{font-size:28px; font-weight:800;}
   .week-row .sub{font-size:11px; color:var(--grey); text-align:right;}
 
+  .week-sbd-row{display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--line);}
+  .week-sbd-row:last-child{border-bottom:none;}
+  .week-sbd-row .lift{font-size:13px; font-weight:700;}
+  .week-sbd-row .empty-lift{font-size:12px; color:var(--grey);}
+  .week-sbd-row .figures{text-align:right;}
+  .week-sbd-row .figures .w{font-size:16px; font-weight:800;}
+  .week-sbd-row .figures .meta{font-size:11px; color:var(--grey); margin-top:1px;}
+
   .heatmap-grid{display:grid; grid-template-columns:repeat(13, 1fr); gap:4px;}
   .hm-cell{aspect-ratio:1; border-radius:3px; background:var(--line);}
   .hm-legend{display:flex; justify-content:space-between; align-items:center; margin-top:10px; font-size:10px; color:var(--grey);}
@@ -192,6 +200,9 @@
   .superset-tag{
     font-size:10px; color:var(--blue); text-transform:uppercase; letter-spacing:0.5px; font-weight:700; margin-bottom:4px;
   }
+  .topset-tag{
+    font-size:10px; color:var(--red); text-transform:uppercase; letter-spacing:0.5px; font-weight:700; margin-bottom:4px;
+  }
   .ex-block-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
   .ex-block-top h3{font-size:15px; font-weight:700;}
   .ex-block-top .last{font-size:11px; color:var(--grey); margin-top:2px;}
@@ -206,6 +217,9 @@
   .set-row .r-input{flex:1;}
   .set-row .unit-lbl{font-size:11px; color:var(--grey); width:24px;}
   .set-row .rm-set{background:none; border:none; color:var(--grey); font-size:16px; width:24px;}
+  .set-star{background:none; border:none; color:var(--grey); font-size:16px; width:22px;}
+  .set-star.active{color:var(--red);}
+  .set-row.is-topset{background:var(--red-dim); border-radius:8px; padding:4px 2px; margin-left:-2px; margin-right:-2px;}
   .add-set-btn{
     width:100%; background:none; border:1px dashed var(--line); border-radius:8px;
     color:var(--grey); padding:9px; font-size:12px; margin-top:2px; text-transform:uppercase; letter-spacing:0.5px;
@@ -228,6 +242,8 @@
     border:1px solid var(--line); border-radius:12px; padding:10px;
   }
   .rest-controls.open{display:flex;}
+  .rest-presets{display:flex; gap:6px; margin-bottom:2px;}
+  .rest-presets button{padding:8px 8px !important; font-size:11px !important;}
   .rest-controls button{
     background:var(--card); border:1px solid var(--line); color:var(--white);
     padding:9px 16px; border-radius:8px; font-size:12px; font-weight:700; white-space:nowrap;
@@ -241,6 +257,20 @@
   .chip.selected{background:var(--red); border-color:var(--red);}
   .chip.selected-blue{background:var(--blue); border-color:var(--blue);}
   .chip.add-new{color:var(--red); border-style:dashed;}
+
+  .draft-exercise-row{
+    display:flex; justify-content:space-between; align-items:center;
+    background:var(--charcoal); border:1px solid var(--line); border-radius:10px;
+    padding:10px 12px; margin-bottom:8px;
+  }
+  .draft-exercise-name{font-size:13px; font-weight:600;}
+  .draft-exercise-actions{display:flex; align-items:center; gap:10px;}
+  .star-btn{
+    background:none; border:1px solid var(--line); color:var(--grey);
+    font-size:11px; padding:6px 10px; border-radius:8px; white-space:nowrap;
+  }
+  .star-btn.active{background:var(--red-dim); border-color:var(--red); color:var(--white);}
+  .rm-chip{background:none; border:none; color:var(--grey); font-size:16px; padding:0 4px;}
 
   .ex-picker-row{
     display:flex; justify-content:space-between; align-items:center;
@@ -290,11 +320,8 @@
     </div>
 
     <div class="card">
-      <div class="card-label">This week</div>
-      <div class="week-row">
-        <div><span class="val" id="weekVolume">0</span> <span style="font-size:12px;color:var(--grey)">kg moved</span></div>
-        <div class="sub" id="weekSessions">0 workouts</div>
-      </div>
+      <div class="card-label">SBD this week</div>
+      <div id="weekSBDList"></div>
     </div>
   </section>
 
@@ -337,7 +364,7 @@
     <div class="field">
       <label>Exercises</label>
       <div class="chip-list" id="routineExerciseChips"></div>
-      <small class="hint">Tap to remove. Use the catalog below to add.</small>
+      <small class="hint">Mark up to 2 exercises with a top set. Use × to remove, catalog below to add.</small>
     </div>
     <div class="field">
       <label>Add exercise</label>
@@ -479,6 +506,13 @@
 
 <div class="rest-fab-wrap" id="restFabWrap">
   <div class="rest-controls" id="restControls">
+    <div class="rest-presets">
+      <button onclick="setRestDuration(60)">1:00</button>
+      <button onclick="setRestDuration(90)">1:30</button>
+      <button onclick="setRestDuration(120)">2:00</button>
+      <button onclick="setRestDuration(180)">3:00</button>
+      <button onclick="setRestDuration(300)">5:00</button>
+    </div>
     <button onclick="adjustRest(15)">+15s</button>
     <button onclick="adjustRest(-15)">-15s</button>
     <button onclick="restartRest()">Restart</button>
@@ -657,11 +691,37 @@ function renderWeek(){
   const dow = (today.getDay()+6)%7;
   const monday = new Date(today); monday.setDate(today.getDate()-dow);
   const mondayStr = monday.toISOString().slice(0,10);
-  const weekSessions = db.sessions.filter(s=> s.date >= mondayStr);
-  let vol = 0;
-  weekSessions.forEach(s=> s.exercises.forEach(e=> e.sets.forEach(set=> vol += set.w*set.r)));
-  document.getElementById('weekVolume').textContent = Math.round(vol).toLocaleString('en-US');
-  document.getElementById('weekSessions').textContent = weekSessions.length + ' workout' + (weekSessions.length===1?'':'s');
+
+  const wrap = document.getElementById('weekSBDList');
+  wrap.innerHTML = '';
+  Object.entries(BASICS).forEach(([key, label])=>{
+    const aliases = BASIC_ALIASES[key];
+    let best = null;
+    db.sessions.forEach(s=>{
+      if(s.date < mondayStr) return;
+      s.exercises.forEach(e=>{
+        if(!aliases.includes(normalizeName(e.name))) return;
+        e.sets.forEach(set=>{
+          if(!best || set.w > best.w){ best = { w:set.w, r:set.r, date:s.date }; }
+        });
+      });
+    });
+    const row = document.createElement('div');
+    row.className = 'week-sbd-row';
+    if(best){
+      const dateFmt = new Date(best.date+'T00:00:00').toLocaleDateString('en-US', {day:'numeric', month:'short'});
+      row.innerHTML = `
+        <span class="lift">${label}</span>
+        <div class="figures">
+          <div class="w">${best.w} kg × ${best.r}</div>
+          <div class="meta">${dateFmt}</div>
+        </div>
+      `;
+    } else {
+      row.innerHTML = `<span class="lift">${label}</span><span class="empty-lift">Not trained yet</span>`;
+    }
+    wrap.appendChild(row);
+  });
 }
 
 /* ================= WORKOUT (routines) ================= */
@@ -688,6 +748,7 @@ function renderRoutines(){
 
 let editingRoutineId = null;
 let routineDraftExercises = [];
+let routineDraftTopSets = [];
 
 function openRoutineEditor(routineId){
   editingRoutineId = routineId || null;
@@ -698,13 +759,24 @@ function openRoutineEditor(routineId){
     const r = db.routines.find(x=>x.id===routineId);
     document.getElementById('routineNameInput').value = r.name;
     routineDraftExercises = [...r.exercises];
+    routineDraftTopSets = [...(r.topSetExercises || [])];
   } else {
     document.getElementById('routineNameInput').value = '';
     routineDraftExercises = [];
+    routineDraftTopSets = [];
   }
   renderRoutineDraftChips();
   renderCatalogChips();
   overlay.classList.add('active');
+}
+function toggleTopSet(name){
+  const pos = routineDraftTopSets.indexOf(name);
+  if(pos>-1){ routineDraftTopSets.splice(pos,1); }
+  else{
+    if(routineDraftTopSets.length>=2){ toast('Max 2 top set exercises per routine'); return; }
+    routineDraftTopSets.push(name);
+  }
+  renderRoutineDraftChips();
 }
 function renderRoutineDraftChips(){
   const wrap = document.getElementById('routineExerciseChips');
@@ -714,12 +786,24 @@ function renderRoutineDraftChips(){
     return;
   }
   routineDraftExercises.forEach(name=>{
-    const c = document.createElement('div');
-    c.className = 'chip selected';
-    c.textContent = name + ' ×';
-    c.onclick = ()=>{ routineDraftExercises = routineDraftExercises.filter(n=>n!==name); renderRoutineDraftChips(); };
-    wrap.appendChild(c);
+    const row = document.createElement('div');
+    row.className = 'draft-exercise-row';
+    const isTop = routineDraftTopSets.includes(name);
+    row.innerHTML = `
+      <span class="draft-exercise-name">${name}</span>
+      <div class="draft-exercise-actions">
+        <button class="star-btn ${isTop?'active':''}" onclick="toggleTopSet('${name.replace(/'/g,"\\'")}')">${isTop ? '★ Top set' : '☆ Top set'}</button>
+        <button class="rm-chip" onclick="removeDraftExercise('${name.replace(/'/g,"\\'")}')">×</button>
+      </div>
+    `;
+    wrap.appendChild(row);
   });
+}
+function removeDraftExercise(name){
+  routineDraftExercises = routineDraftExercises.filter(n=>n!==name);
+  routineDraftTopSets = routineDraftTopSets.filter(n=>n!==name);
+  renderRoutineDraftChips();
+  renderCatalogChips();
 }
 function renderCatalogChips(){
   const wrap = document.getElementById('catalogChips');
@@ -750,9 +834,9 @@ function saveRoutine(){
   if(!routineDraftExercises.length){ toast('Add at least one exercise'); return; }
   if(editingRoutineId){
     const r = db.routines.find(x=>x.id===editingRoutineId);
-    r.name = name; r.exercises = [...routineDraftExercises];
+    r.name = name; r.exercises = [...routineDraftExercises]; r.topSetExercises = [...routineDraftTopSets];
   } else {
-    db.routines.push({ id: uid('r'), name, exercises:[...routineDraftExercises] });
+    db.routines.push({ id: uid('r'), name, exercises:[...routineDraftExercises], topSetExercises:[...routineDraftTopSets] });
   }
   saveDB();
   closeOverlay('routineEditorOverlay');
@@ -801,10 +885,14 @@ function renderActiveSessionBanner(){
 
 function startWorkout(routineId){
   const r = db.routines.find(x=>x.id===routineId);
+  const topSetNames = r.topSetExercises || [];
   liveSession = {
     routine: r.name,
     startedAt: Date.now(),
-    exercises: r.exercises.map(name=> ({ name, sets:[ {w:null, r:null} ], supersetGroup:null, supersetRole:null }))
+    exercises: r.exercises.map(name=> ({
+      name, sets:[ {w:null, r:null, isTopSet:false} ], supersetGroup:null, supersetRole:null,
+      isTopSetExercise: topSetNames.includes(name)
+    }))
   };
   saveActiveSession();
   document.getElementById('liveWorkoutTitle').textContent = r.name;
@@ -860,11 +948,13 @@ function renderLiveWorkout(){
       const partner = liveSession.exercises.find(o=> o!==ex && o.supersetGroup===ex.supersetGroup);
       supersetTag = `<div class="superset-tag">Superset ${ex.supersetRole.toUpperCase()}${partner ? ' · with '+partner.name : ''}</div>`;
     }
+    const topSetTag = ex.isTopSetExercise ? `<div class="topset-tag">★ Top set exercise</div>` : '';
 
     block.innerHTML = `
       <div class="ex-block-top">
         <div>
           ${supersetTag}
+          ${topSetTag}
           <h3>${ex.name}</h3>
           <div class="last">${lastStr}</div>
           ${prStr ? `<div class="pr">${prStr}</div>` : ''}
@@ -886,11 +976,16 @@ function renderLiveWorkout(){
 function renderSets(exIdx){
   const wrap = document.getElementById('sets-'+exIdx);
   wrap.innerHTML = '';
-  liveSession.exercises[exIdx].sets.forEach((set, setIdx)=>{
+  const ex = liveSession.exercises[exIdx];
+  ex.sets.forEach((set, setIdx)=>{
     const row = document.createElement('div');
-    row.className = 'set-row';
+    row.className = 'set-row' + (set.isTopSet ? ' is-topset' : '');
+    const starBtn = ex.isTopSetExercise
+      ? `<button class="set-star ${set.isTopSet?'active':''}" onclick="toggleSetTopSet(${exIdx}, ${setIdx})">${set.isTopSet ? '★' : '☆'}</button>`
+      : '';
     row.innerHTML = `
       <span class="idx">${setIdx+1}</span>
+      ${starBtn}
       <input class="w-input" type="number" inputmode="decimal" placeholder="kg" step="0.5" value="${set.w ?? ''}"
         onchange="updateSet(${exIdx}, ${setIdx}, 'w', this.value)">
       <span class="unit-lbl">kg</span>
@@ -901,16 +996,24 @@ function renderSets(exIdx){
     wrap.appendChild(row);
   });
 }
+function toggleSetTopSet(exIdx, setIdx){
+  const ex = liveSession.exercises[exIdx];
+  const wasTop = ex.sets[setIdx].isTopSet;
+  ex.sets.forEach(s=> s.isTopSet = false);
+  ex.sets[setIdx].isTopSet = !wasTop;
+  renderSets(exIdx);
+  saveActiveSession();
+}
 function addSet(exIdx){
   const sets = liveSession.exercises[exIdx].sets;
   const prevSet = sets[sets.length-1];
-  sets.push({ w: prevSet ? prevSet.w : null, r: prevSet ? prevSet.r : null });
+  sets.push({ w: prevSet ? prevSet.w : null, r: prevSet ? prevSet.r : null, isTopSet:false });
   renderSets(exIdx);
   saveActiveSession();
 }
 function removeSet(exIdx, setIdx){
   liveSession.exercises[exIdx].sets.splice(setIdx,1);
-  if(!liveSession.exercises[exIdx].sets.length) liveSession.exercises[exIdx].sets.push({w:null,r:null});
+  if(!liveSession.exercises[exIdx].sets.length) liveSession.exercises[exIdx].sets.push({w:null,r:null,isTopSet:false});
   renderSets(exIdx);
   saveActiveSession();
 }
@@ -955,12 +1058,12 @@ function openExercisePicker(exIdx){
 }
 function pickExercise(name){
   if(pickerTargetExIdx===null){
-    liveSession.exercises.push({ name, sets:[{w:null,r:null}], supersetGroup:null, supersetRole:null });
+    liveSession.exercises.push({ name, sets:[{w:null,r:null,isTopSet:false}], supersetGroup:null, supersetRole:null, isTopSetExercise:false });
   } else {
     const ex = liveSession.exercises[pickerTargetExIdx];
     if(ex.supersetGroup) unlinkSuperset(pickerTargetExIdx, true);
     ex.name = name;
-    ex.sets = [{w:null,r:null}];
+    ex.sets = [{w:null,r:null,isTopSet:false}];
   }
   closeOverlay('exercisePickerOverlay');
   renderLiveWorkout();
@@ -992,383 +1095,3 @@ function openSupersetPicker(){
   });
   document.getElementById('supersetPickerOverlay').classList.add('active');
 }
-function toggleSupersetPick(exIdx, el){
-  const pos = supersetSelection.indexOf(exIdx);
-  if(pos>-1){ supersetSelection.splice(pos,1); el.classList.remove('selected-blue'); }
-  else{
-    if(supersetSelection.length>=2){ toast('Pick only 2 exercises'); return; }
-    supersetSelection.push(exIdx); el.classList.add('selected-blue');
-  }
-}
-function confirmSuperset(){
-  if(supersetSelection.length !== 2){ toast('Pick exactly 2 exercises'); return; }
-  const groupId = uid('ss');
-  const [aIdx, bIdx] = supersetSelection;
-  // clear any previous grouping on these exercises
-  [aIdx,bIdx].forEach(i=>{ liveSession.exercises[i].supersetGroup=null; liveSession.exercises[i].supersetRole=null; });
-  liveSession.exercises[aIdx].supersetGroup = groupId;
-  liveSession.exercises[aIdx].supersetRole = 'a';
-  liveSession.exercises[bIdx].supersetGroup = groupId;
-  liveSession.exercises[bIdx].supersetRole = 'b';
-  closeOverlay('supersetPickerOverlay');
-  renderLiveWorkout();
-  saveActiveSession();
-  toast('Superset linked');
-}
-function unlinkSuperset(exIdx, silent){
-  const ex = liveSession.exercises[exIdx];
-  if(!ex.supersetGroup) return;
-  const groupId = ex.supersetGroup;
-  liveSession.exercises.forEach(o=>{
-    if(o.supersetGroup === groupId){ o.supersetGroup=null; o.supersetRole=null; }
-  });
-  if(!silent){ renderLiveWorkout(); saveActiveSession(); toast('Superset unlinked'); }
-}
-
-function finishWorkout(){
-  const validExercises = liveSession.exercises
-    .map(ex=> ({
-      name: ex.name,
-      sets: ex.sets.filter(s=> s.w!=null && s.r!=null && s.w>0 && s.r>0),
-      supersetGroup: ex.supersetGroup, supersetRole: ex.supersetRole
-    }))
-    .filter(ex=> ex.sets.length>0);
-  if(!validExercises.length){
-    if(!confirm('No sets logged. Finish anyway without saving?')) return;
-    liveSession = null; stopRest(); saveActiveSession(); closeOverlay('liveWorkoutOverlay'); return;
-  }
-  const durationMin = Math.max(1, Math.round((Date.now()-liveSession.startedAt)/60000));
-  db.sessions.push({
-    id: uid('s'),
-    date: todayStr(),
-    routine: liveSession.routine,
-    durationMin,
-    exercises: validExercises
-  });
-  saveDB();
-  liveSession = null;
-  stopRest();
-  saveActiveSession();
-  closeOverlay('liveWorkoutOverlay');
-  renderAll();
-  toast('Workout saved');
-}
-
-/* Rest timer */
-/* Alert sound + vibration when rest ends */
-let audioCtx = null;
-function ensureAudioCtx(){
-  if(!audioCtx){
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if(Ctx) audioCtx = new Ctx();
-  }
-  if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-  return audioCtx;
-}
-document.addEventListener('touchstart', ensureAudioCtx, { once:true, passive:true });
-document.addEventListener('click', ensureAudioCtx, { once:true });
-
-function playRestEndSound(){
-  const ctx = ensureAudioCtx();
-  if(!ctx) return;
-  try{
-    const now = ctx.currentTime;
-    [0, 0.2, 0.4].forEach(offset=>{
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = 880;
-      gain.gain.setValueAtTime(0.0001, now+offset);
-      gain.gain.exponentialRampToValueAtTime(0.35, now+offset+0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now+offset+0.18);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(now+offset);
-      osc.stop(now+offset+0.2);
-    });
-  } catch(e){ /* audio not available */ }
-}
-function vibrateRestEnd(){
-  if('vibrate' in navigator){
-    try{ navigator.vibrate([200,100,200]); } catch(e){}
-  }
-}
-
-function startRest(seconds){
-  restRemaining = seconds;
-  document.getElementById('restFabWrap').classList.add('active');
-  updateRestDisplay();
-  clearInterval(restInterval);
-  restInterval = setInterval(()=>{
-    restRemaining--;
-    if(restRemaining<=0){ stopRest(); vibrateRestEnd(); playRestEndSound(); toast('Back to it!'); return; }
-    updateRestDisplay();
-  },1000);
-}
-function restartRest(){ startRest(db.settings.restSeconds); }
-function toggleRestControls(){ document.getElementById('restControls').classList.toggle('open'); }
-function updateRestDisplay(){
-  const m = Math.floor(restRemaining/60).toString().padStart(2,'0');
-  const s = (restRemaining%60).toString().padStart(2,'0');
-  document.getElementById('restFabVal').textContent = m+':'+s;
-}
-function adjustRest(delta){ restRemaining = Math.max(0, restRemaining+delta); updateRestDisplay(); }
-function stopRest(){
-  clearInterval(restInterval);
-  document.getElementById('restFabWrap').classList.remove('active');
-  document.getElementById('restControls').classList.remove('open');
-}
-function startManualRest(exIdx){
-  startRest(db.settings.restSeconds);
-}
-
-/* ================= STATS ================= */
-function renderStatGrid(){
-  const grid = document.getElementById('statGrid');
-  grid.innerHTML = '';
-  Object.entries(BASICS).forEach(([key,name])=>{
-    const pr = prForBasic(key);
-    const goal = db.goals[key];
-    const div = document.createElement('div');
-    div.className = 'stat-mini';
-    const val = pr ? pr.weight+' kg' : '—';
-    const subval = pr ? `× ${pr.reps} reps` : '';
-    let deltaHtml = '';
-    if(pr && goal){
-      const delta = goal - pr.weight;
-      deltaHtml = delta>0 ? `<div class="delta up">${delta} kg to go</div>` : `<div class="delta done">goal reached!</div>`;
-    }
-    div.innerHTML = `<div class="label">${name}</div><div class="val">${val}</div><div class="subval">${subval}</div>${deltaHtml}`;
-    grid.appendChild(div);
-  });
-}
-function renderSessions(){
-  const list = document.getElementById('sessionList');
-  list.innerHTML = '';
-  if(!db.sessions.length){ list.innerHTML = '<div class="empty">No workouts logged yet.</div>'; return; }
-  const sorted = [...db.sessions].sort((a,b)=> b.date.localeCompare(a.date));
-  sorted.forEach(s=>{
-    let vol=0, totalSets=0;
-    s.exercises.forEach(e=> e.sets.forEach(set=>{ vol += set.w*set.r; totalSets++; }));
-    const div = document.createElement('div');
-    div.className = 'session-row';
-    div.style.cursor = 'pointer';
-    div.onclick = ()=> openSessionDetail(s.id);
-    const dateFmt = new Date(s.date+'T00:00:00').toLocaleDateString('en-US', {day:'numeric', month:'short'});
-    div.innerHTML = `
-      <div class="session-top"><span class="name">${s.routine}</span><span class="date">${dateFmt}</span></div>
-      <div class="session-meta">
-        <span><b>${s.exercises.length}</b> exercises</span>
-        <span><b>${totalSets}</b> sets</span>
-        <span><b>${Math.round(vol).toLocaleString('en-US')}</b> kg vol.</span>
-        <span><b>${s.durationMin}</b> min</span>
-      </div>
-    `;
-    list.appendChild(div);
-  });
-}
-
-/* Session detail */
-let detailSessionId = null;
-function openSessionDetail(sessionId){
-  detailSessionId = sessionId;
-  const s = db.sessions.find(x=>x.id===sessionId);
-  const dateFmt = new Date(s.date+'T00:00:00').toLocaleDateString('en-US', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
-  document.getElementById('sessionDetailTitle').textContent = s.routine;
-  const body = document.getElementById('sessionDetailBody');
-  let vol=0, totalSets=0;
-  s.exercises.forEach(e=> e.sets.forEach(set=>{ vol += set.w*set.r; totalSets++; }));
-  body.innerHTML = `
-    <div class="card">
-      <div class="card-label">${dateFmt}</div>
-      <div class="session-meta" style="font-size:12px;">
-        <span><b>${s.durationMin}</b> min</span>
-        <span><b>${s.exercises.length}</b> exercises</span>
-        <span><b>${totalSets}</b> sets</span>
-        <span><b>${Math.round(vol).toLocaleString('en-US')}</b> kg vol.</span>
-      </div>
-    </div>
-  `;
-  s.exercises.forEach(ex=>{
-    const block = document.createElement('div');
-    block.className = 'ex-block';
-    if(ex.supersetRole === 'a') block.classList.add('superset-a');
-    if(ex.supersetRole === 'b') block.classList.add('superset-b');
-    const supersetTag = ex.supersetRole ? `<div class="superset-tag">Superset ${ex.supersetRole.toUpperCase()}</div>` : '';
-    const rows = ex.sets.map((set,i)=> `
-      <div class="set-row" style="margin-bottom:6px;">
-        <span class="idx">${i+1}</span>
-        <span style="flex:1.4; text-align:center;">${set.w} kg</span>
-        <span style="flex:1; text-align:center; color:var(--grey);">${set.r} reps</span>
-      </div>`).join('');
-    block.innerHTML = `<div class="ex-block-top"><div>${supersetTag}<h3>${ex.name}</h3></div></div>${rows}`;
-    body.appendChild(block);
-  });
-  document.getElementById('sessionDetailOverlay').classList.add('active');
-}
-function editFromDetail(){
-  closeOverlay('sessionDetailOverlay');
-  openEditSession(detailSessionId);
-}
-
-/* Edit past session */
-let editingSessionId = null;
-function openEditSession(sessionId){
-  editingSessionId = sessionId;
-  const s = db.sessions.find(x=>x.id===sessionId);
-  const body = document.getElementById('editSessionBody');
-  body.innerHTML = `
-    <div class="field"><label>Date</label><input type="date" id="editDate" value="${s.date}"></div>
-    <div class="field"><label>Routine</label><input type="text" id="editRoutine" value="${s.routine}"></div>
-    <div class="field"><label>Duration (min)</label><input type="number" id="editDuration" value="${s.durationMin}"></div>
-  `;
-  s.exercises.forEach((ex, exIdx)=>{
-    const block = document.createElement('div');
-    block.className = 'ex-block';
-    block.innerHTML = `<div class="ex-block-top"><h3>${ex.name}</h3></div><div id="editSets-${exIdx}"></div>`;
-    body.appendChild(block);
-    const wrap = block.querySelector(`#editSets-${exIdx}`);
-    ex.sets.forEach((set, setIdx)=>{
-      const row = document.createElement('div');
-      row.className = 'set-row';
-      row.innerHTML = `
-        <span class="idx">${setIdx+1}</span>
-        <input class="w-input" type="number" step="0.5" value="${set.w}" data-ex="${exIdx}" data-set="${setIdx}" data-field="w">
-        <span class="unit-lbl">kg</span>
-        <input class="r-input" type="number" value="${set.r}" data-ex="${exIdx}" data-set="${setIdx}" data-field="r">
-      `;
-      wrap.appendChild(row);
-    });
-  });
-  document.getElementById('editSessionOverlay').classList.add('active');
-}
-function saveEditedSession(){
-  const s = db.sessions.find(x=>x.id===editingSessionId);
-  s.date = document.getElementById('editDate').value || s.date;
-  s.routine = document.getElementById('editRoutine').value.trim() || s.routine;
-  s.durationMin = parseInt(document.getElementById('editDuration').value) || s.durationMin;
-  document.querySelectorAll('#editSessionBody input[data-ex]').forEach(input=>{
-    const exIdx = parseInt(input.dataset.ex), setIdx = parseInt(input.dataset.set), field = input.dataset.field;
-    const val = parseFloat(input.value);
-    if(!isNaN(val)) s.exercises[exIdx].sets[setIdx][field] = val;
-  });
-  saveDB();
-  closeOverlay('editSessionOverlay');
-  renderAll();
-  toast('Workout updated');
-}
-function deleteSession(){
-  if(!confirm('Delete this workout entirely?')) return;
-  db.sessions = db.sessions.filter(x=>x.id!==editingSessionId);
-  saveDB();
-  closeOverlay('editSessionOverlay');
-  renderAll();
-  toast('Workout deleted');
-}
-
-/* ================= GOALS ================= */
-function openGoals(){
-  document.getElementById('goalSquat').value = db.goals.squat ?? '';
-  document.getElementById('goalBench').value = db.goals.bench ?? '';
-  document.getElementById('goalDeadlift').value = db.goals.deadlift ?? '';
-  document.getElementById('goalsOverlay').classList.add('active');
-}
-function saveGoals(){
-  db.goals.squat = parseFloat(document.getElementById('goalSquat').value)||0;
-  db.goals.bench = parseFloat(document.getElementById('goalBench').value)||0;
-  db.goals.deadlift = parseFloat(document.getElementById('goalDeadlift').value)||0;
-  saveDB();
-  closeOverlay('goalsOverlay');
-  renderAll();
-  toast('Goals updated');
-}
-
-/* ================= SETTINGS / BACKUP ================= */
-function openSettings(){
-  document.getElementById('restMinutesInput').value = db.settings.restSeconds/60;
-  document.getElementById('settingsOverlay').classList.add('active');
-}
-function saveRestSetting(){
-  const minutes = parseFloat(document.getElementById('restMinutesInput').value);
-  if(!minutes || minutes<=0){ toast('Enter a valid number of minutes'); return; }
-  db.settings.restSeconds = Math.round(minutes*60);
-  saveDB();
-  toast('Rest timer updated');
-}
-function resetAllData(){
-  if(!confirm('This will delete ALL your data (routines, workouts, goals, catalog). Are you sure?')) return;
-  if(!confirm('Last confirmation: this cannot be undone. Delete everything?')) return;
-  localStorage.removeItem(DB_KEY);
-  db = { settings:{restSeconds:180}, goals:{squat:0,bench:0,deadlift:0}, exerciseCatalog:[], routines:[], sessions:[] };
-  saveDB();
-  closeOverlay('settingsOverlay');
-  renderAll();
-  toast('Data deleted');
-}
-function downloadBackup(){
-  const blob = new Blob([JSON.stringify(db, null, 2)], {type:'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  const stamp = new Date().toISOString().slice(0,10);
-  a.href = url;
-  a.download = `sbd-tracker-backup-${stamp}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  toast('Backup downloaded');
-}
-function restoreBackup(){
-  const fileInput = document.getElementById('restoreFile');
-  const file = fileInput.files[0];
-  if(!file){ toast('Choose a file first'); return; }
-  if(!confirm('This will replace all current data. Continue?')) return;
-  const reader = new FileReader();
-  reader.onload = (e)=>{
-    try{
-      const parsed = JSON.parse(e.target.result);
-      if(!parsed.sessions || !parsed.routines){ toast('Invalid file'); return; }
-      if(!parsed.settings) parsed.settings = { restSeconds: 180 };
-      db = parsed;
-      saveDB();
-      closeOverlay('settingsOverlay');
-      renderAll();
-      toast('Data restored');
-    } catch(err){
-      toast('Could not read the file');
-    }
-  };
-  reader.readAsText(file);
-}
-
-/* ================= NAV / OVERLAYS ================= */
-function showScreen(id){
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
-  document.querySelector(`nav button[data-screen="${id}"]`).classList.add('active');
-}
-function closeOverlay(id){ document.getElementById(id).classList.remove('active'); }
-
-/* ================= INIT ================= */
-function renderAll(){
-  renderHeatmap();
-  renderSBD();
-  renderWeek();
-  renderRoutines();
-  renderStatGrid();
-  renderSessions();
-  renderActiveSessionBanner();
-}
-liveSession = loadActiveSession();
-renderAll();
-
-/* ================= PWA ================= */
-if('serviceWorker' in navigator){
-  window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('sw.js').catch(()=>{});
-  });
-}
-</script>
-
-</body>
-</html>
