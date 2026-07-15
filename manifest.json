@@ -2,7 +2,7 @@
   "name": "SBD Tracker",
   "short_name": "SBD Tracker",
   "description": "Tracker de progreso para sentadilla, press banca y peso muerto.",
-  "start_url": "./index.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
