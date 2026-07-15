@@ -184,6 +184,9 @@
   }
   .overlay-header h2{font-size:15px; font-weight:800; text-transform:uppercase; letter-spacing:1px;}
   .overlay-body{flex:1; overflow-y:auto; padding:16px; padding-bottom:110px;}
+  /* Live workout footer has 4 stacked buttons, so it needs extra bottom
+     clearance to avoid covering the last exercise(s) in the list. */
+  #liveWorkoutBody{padding-bottom:260px;}
   .overlay-footer{
     position:fixed; bottom:0; left:0; right:0; padding:14px 16px; background:var(--black);
     border-top:1px solid var(--line); padding-bottom:calc(14px + env(safe-area-inset-bottom));
