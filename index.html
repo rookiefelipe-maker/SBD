@@ -1095,3 +1095,417 @@ function openSupersetPicker(){
   });
   document.getElementById('supersetPickerOverlay').classList.add('active');
 }
+function toggleSupersetPick(exIdx, el){
+  const pos = supersetSelection.indexOf(exIdx);
+  if(pos>-1){ supersetSelection.splice(pos,1); el.classList.remove('selected-blue'); }
+  else{
+    if(supersetSelection.length>=2){ toast('Pick only 2 exercises'); return; }
+    supersetSelection.push(exIdx); el.classList.add('selected-blue');
+  }
+}
+function confirmSuperset(){
+  if(supersetSelection.length !== 2){ toast('Pick exactly 2 exercises'); return; }
+  const groupId = uid('ss');
+  const [aIdx, bIdx] = supersetSelection;
+  // clear any previous grouping on these exercises
+  [aIdx,bIdx].forEach(i=>{ liveSession.exercises[i].supersetGroup=null; liveSession.exercises[i].supersetRole=null; });
+  liveSession.exercises[aIdx].supersetGroup = groupId;
+  liveSession.exercises[aIdx].supersetRole = 'a';
+  liveSession.exercises[bIdx].supersetGroup = groupId;
+  liveSession.exercises[bIdx].supersetRole = 'b';
+  closeOverlay('supersetPickerOverlay');
+  renderLiveWorkout();
+  saveActiveSession();
+  toast('Superset linked');
+}
+function unlinkSuperset(exIdx, silent){
+  const ex = liveSession.exercises[exIdx];
+  if(!ex.supersetGroup) return;
+  const groupId = ex.supersetGroup;
+  liveSession.exercises.forEach(o=>{
+    if(o.supersetGroup === groupId){ o.supersetGroup=null; o.supersetRole=null; }
+  });
+  if(!silent){ renderLiveWorkout(); saveActiveSession(); toast('Superset unlinked'); }
+}
+
+function finishWorkout(){
+  const validExercises = liveSession.exercises
+    .map(ex=> ({
+      name: ex.name,
+      sets: ex.sets.filter(s=> s.w!=null && s.r!=null && s.w>0 && s.r>0),
+      supersetGroup: ex.supersetGroup, supersetRole: ex.supersetRole,
+      isTopSetExercise: !!ex.isTopSetExercise
+    }))
+    .filter(ex=> ex.sets.length>0);
+  if(!validExercises.length){
+    if(!confirm('No sets logged. Finish anyway without saving?')) return;
+    liveSession = null; stopRest(); saveActiveSession(); closeOverlay('liveWorkoutOverlay'); return;
+  }
+  const durationMin = Math.max(1, Math.round((Date.now()-liveSession.startedAt)/60000));
+  db.sessions.push({
+    id: uid('s'),
+    date: todayStr(),
+    routine: liveSession.routine,
+    durationMin,
+    exercises: validExercises
+  });
+  saveDB();
+  liveSession = null;
+  stopRest();
+  saveActiveSession();
+  closeOverlay('liveWorkoutOverlay');
+  renderAll();
+  toast('Workout saved');
+}
+
+/* Rest timer */
+/* Alert sound + vibration when rest ends */
+let audioCtx = null;
+function ensureAudioCtx(){
+  if(!audioCtx){
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if(Ctx) audioCtx = new Ctx();
+  }
+  if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+document.addEventListener('touchstart', ensureAudioCtx, { once:true, passive:true });
+document.addEventListener('click', ensureAudioCtx, { once:true });
+
+function playRestEndSound(){
+  const ctx = ensureAudioCtx();
+  if(!ctx) return;
+  try{
+    const now = ctx.currentTime;
+    [0, 0.2, 0.4].forEach(offset=>{
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.0001, now+offset);
+      gain.gain.exponentialRampToValueAtTime(0.35, now+offset+0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now+offset+0.18);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now+offset);
+      osc.stop(now+offset+0.2);
+    });
+  } catch(e){ /* audio not available */ }
+}
+function vibrateRestEnd(){
+  if('vibrate' in navigator){
+    try{ navigator.vibrate([200,100,200]); } catch(e){}
+  }
+}
+
+/* Short tap feedback: pop sound + light vibration on interactive taps */
+function playPopSound(){
+  const ctx = ensureAudioCtx();
+  if(!ctx) return;
+  try{
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(520, now);
+    osc.frequency.exponentialRampToValueAtTime(220, now+0.08);
+    gain.gain.setValueAtTime(0.28, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now+0.09);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now+0.1);
+  } catch(e){ /* audio not available */ }
+}
+function vibrateTap(){
+  if('vibrate' in navigator){
+    try{ navigator.vibrate(15); } catch(e){}
+  }
+}
+document.addEventListener('click', (e)=>{
+  const target = e.target.closest('button, .chip, .routine-card, .session-row, .active-session-banner, .ex-picker-row');
+  if(!target || target.disabled) return;
+  playPopSound();
+  vibrateTap();
+}, true);
+
+function startRest(seconds){
+  restRemaining = seconds;
+  document.getElementById('restFabWrap').classList.add('active');
+  updateRestDisplay();
+  clearInterval(restInterval);
+  restInterval = setInterval(()=>{
+    restRemaining--;
+    if(restRemaining<=0){ stopRest(); vibrateRestEnd(); playRestEndSound(); toast('Back to it!'); return; }
+    updateRestDisplay();
+  },1000);
+}
+function restartRest(){ startRest(db.settings.restSeconds); }
+function toggleRestControls(){ document.getElementById('restControls').classList.toggle('open'); }
+function updateRestDisplay(){
+  const m = Math.floor(restRemaining/60).toString().padStart(2,'0');
+  const s = (restRemaining%60).toString().padStart(2,'0');
+  document.getElementById('restFabVal').textContent = m+':'+s;
+}
+function adjustRest(delta){ restRemaining = Math.max(0, restRemaining+delta); updateRestDisplay(); }
+function setRestDuration(seconds){ startRest(seconds); }
+function stopRest(){
+  clearInterval(restInterval);
+  document.getElementById('restFabWrap').classList.remove('active');
+  document.getElementById('restControls').classList.remove('open');
+}
+function startManualRest(exIdx){
+  startRest(db.settings.restSeconds);
+  document.getElementById('restControls').classList.add('open');
+}
+
+/* ================= STATS ================= */
+function renderStatGrid(){
+  const grid = document.getElementById('statGrid');
+  grid.innerHTML = '';
+  Object.entries(BASICS).forEach(([key,name])=>{
+    const pr = prForBasic(key);
+    const goal = db.goals[key];
+    const div = document.createElement('div');
+    div.className = 'stat-mini';
+    const val = pr ? pr.weight+' kg' : '—';
+    const subval = pr ? `× ${pr.reps} reps` : '';
+    let deltaHtml = '';
+    if(pr && goal){
+      const delta = goal - pr.weight;
+      deltaHtml = delta>0 ? `<div class="delta up">${delta} kg to go</div>` : `<div class="delta done">goal reached!</div>`;
+    }
+    div.innerHTML = `<div class="label">${name}</div><div class="val">${val}</div><div class="subval">${subval}</div>${deltaHtml}`;
+    grid.appendChild(div);
+  });
+}
+function renderSessions(){
+  const list = document.getElementById('sessionList');
+  list.innerHTML = '';
+  if(!db.sessions.length){ list.innerHTML = '<div class="empty">No workouts logged yet.</div>'; return; }
+  const sorted = [...db.sessions].sort((a,b)=> b.date.localeCompare(a.date));
+  sorted.forEach(s=>{
+    let vol=0, totalSets=0;
+    s.exercises.forEach(e=> e.sets.forEach(set=>{ vol += set.w*set.r; totalSets++; }));
+    const div = document.createElement('div');
+    div.className = 'session-row';
+    div.style.cursor = 'pointer';
+    div.onclick = ()=> openSessionDetail(s.id);
+    const dateFmt = new Date(s.date+'T00:00:00').toLocaleDateString('en-US', {day:'numeric', month:'short'});
+    div.innerHTML = `
+      <div class="session-top"><span class="name">${s.routine}</span><span class="date">${dateFmt}</span></div>
+      <div class="session-meta">
+        <span><b>${s.exercises.length}</b> exercises</span>
+        <span><b>${totalSets}</b> sets</span>
+        <span><b>${Math.round(vol).toLocaleString('en-US')}</b> kg vol.</span>
+        <span><b>${s.durationMin}</b> min</span>
+      </div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+/* Session detail */
+let detailSessionId = null;
+function openSessionDetail(sessionId){
+  detailSessionId = sessionId;
+  const s = db.sessions.find(x=>x.id===sessionId);
+  const dateFmt = new Date(s.date+'T00:00:00').toLocaleDateString('en-US', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+  document.getElementById('sessionDetailTitle').textContent = s.routine;
+  const body = document.getElementById('sessionDetailBody');
+  let vol=0, totalSets=0;
+  s.exercises.forEach(e=> e.sets.forEach(set=>{ vol += set.w*set.r; totalSets++; }));
+  body.innerHTML = `
+    <div class="card">
+      <div class="card-label">${dateFmt}</div>
+      <div class="session-meta" style="font-size:12px;">
+        <span><b>${s.durationMin}</b> min</span>
+        <span><b>${s.exercises.length}</b> exercises</span>
+        <span><b>${totalSets}</b> sets</span>
+        <span><b>${Math.round(vol).toLocaleString('en-US')}</b> kg vol.</span>
+      </div>
+    </div>
+  `;
+  s.exercises.forEach(ex=>{
+    const block = document.createElement('div');
+    block.className = 'ex-block';
+    if(ex.supersetRole === 'a') block.classList.add('superset-a');
+    if(ex.supersetRole === 'b') block.classList.add('superset-b');
+    const supersetTag = ex.supersetRole ? `<div class="superset-tag">Superset ${ex.supersetRole.toUpperCase()}</div>` : '';
+    const topSetTag = ex.isTopSetExercise ? `<div class="topset-tag">★ Top set exercise</div>` : '';
+    const rows = ex.sets.map((set,i)=> `
+      <div class="set-row ${set.isTopSet ? 'is-topset' : ''}" style="margin-bottom:6px;">
+        <span class="idx">${set.isTopSet ? '★' : i+1}</span>
+        <span style="flex:1.4; text-align:center;">${set.w} kg</span>
+        <span style="flex:1; text-align:center; color:var(--grey);">${set.r} reps</span>
+      </div>`).join('');
+    block.innerHTML = `<div class="ex-block-top"><div>${supersetTag}${topSetTag}<h3>${ex.name}</h3></div></div>${rows}`;
+    body.appendChild(block);
+  });
+  document.getElementById('sessionDetailOverlay').classList.add('active');
+}
+function editFromDetail(){
+  closeOverlay('sessionDetailOverlay');
+  openEditSession(detailSessionId);
+}
+
+/* Edit past session */
+let editingSessionId = null;
+function openEditSession(sessionId){
+  editingSessionId = sessionId;
+  const s = db.sessions.find(x=>x.id===sessionId);
+  const body = document.getElementById('editSessionBody');
+  body.innerHTML = `
+    <div class="field"><label>Date</label><input type="date" id="editDate" value="${s.date}"></div>
+    <div class="field"><label>Routine</label><input type="text" id="editRoutine" value="${s.routine}"></div>
+    <div class="field"><label>Duration (min)</label><input type="number" id="editDuration" value="${s.durationMin}"></div>
+  `;
+  s.exercises.forEach((ex, exIdx)=>{
+    const block = document.createElement('div');
+    block.className = 'ex-block';
+    block.innerHTML = `<div class="ex-block-top"><h3>${ex.name}</h3></div><div id="editSets-${exIdx}"></div>`;
+    body.appendChild(block);
+    const wrap = block.querySelector(`#editSets-${exIdx}`);
+    ex.sets.forEach((set, setIdx)=>{
+      const row = document.createElement('div');
+      row.className = 'set-row';
+      row.innerHTML = `
+        <span class="idx">${setIdx+1}</span>
+        <input class="w-input" type="number" step="0.5" value="${set.w}" data-ex="${exIdx}" data-set="${setIdx}" data-field="w">
+        <span class="unit-lbl">kg</span>
+        <input class="r-input" type="number" value="${set.r}" data-ex="${exIdx}" data-set="${setIdx}" data-field="r">
+      `;
+      wrap.appendChild(row);
+    });
+  });
+  document.getElementById('editSessionOverlay').classList.add('active');
+}
+function saveEditedSession(){
+  const s = db.sessions.find(x=>x.id===editingSessionId);
+  s.date = document.getElementById('editDate').value || s.date;
+  s.routine = document.getElementById('editRoutine').value.trim() || s.routine;
+  s.durationMin = parseInt(document.getElementById('editDuration').value) || s.durationMin;
+  document.querySelectorAll('#editSessionBody input[data-ex]').forEach(input=>{
+    const exIdx = parseInt(input.dataset.ex), setIdx = parseInt(input.dataset.set), field = input.dataset.field;
+    const val = parseFloat(input.value);
+    if(!isNaN(val)) s.exercises[exIdx].sets[setIdx][field] = val;
+  });
+  saveDB();
+  closeOverlay('editSessionOverlay');
+  renderAll();
+  toast('Workout updated');
+}
+function deleteSession(){
+  if(!confirm('Delete this workout entirely?')) return;
+  db.sessions = db.sessions.filter(x=>x.id!==editingSessionId);
+  saveDB();
+  closeOverlay('editSessionOverlay');
+  renderAll();
+  toast('Workout deleted');
+}
+
+/* ================= GOALS ================= */
+function openGoals(){
+  document.getElementById('goalSquat').value = db.goals.squat ?? '';
+  document.getElementById('goalBench').value = db.goals.bench ?? '';
+  document.getElementById('goalDeadlift').value = db.goals.deadlift ?? '';
+  document.getElementById('goalsOverlay').classList.add('active');
+}
+function saveGoals(){
+  db.goals.squat = parseFloat(document.getElementById('goalSquat').value)||0;
+  db.goals.bench = parseFloat(document.getElementById('goalBench').value)||0;
+  db.goals.deadlift = parseFloat(document.getElementById('goalDeadlift').value)||0;
+  saveDB();
+  closeOverlay('goalsOverlay');
+  renderAll();
+  toast('Goals updated');
+}
+
+/* ================= SETTINGS / BACKUP ================= */
+function openSettings(){
+  document.getElementById('restMinutesInput').value = db.settings.restSeconds/60;
+  document.getElementById('settingsOverlay').classList.add('active');
+}
+function saveRestSetting(){
+  const minutes = parseFloat(document.getElementById('restMinutesInput').value);
+  if(!minutes || minutes<=0){ toast('Enter a valid number of minutes'); return; }
+  db.settings.restSeconds = Math.round(minutes*60);
+  saveDB();
+  toast('Rest timer updated');
+}
+function resetAllData(){
+  if(!confirm('This will delete ALL your data (routines, workouts, goals, catalog). Are you sure?')) return;
+  if(!confirm('Last confirmation: this cannot be undone. Delete everything?')) return;
+  localStorage.removeItem(DB_KEY);
+  db = { settings:{restSeconds:180}, goals:{squat:0,bench:0,deadlift:0}, exerciseCatalog:[], routines:[], sessions:[] };
+  saveDB();
+  closeOverlay('settingsOverlay');
+  renderAll();
+  toast('Data deleted');
+}
+function downloadBackup(){
+  const blob = new Blob([JSON.stringify(db, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = `sbd-tracker-backup-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('Backup downloaded');
+}
+function restoreBackup(){
+  const fileInput = document.getElementById('restoreFile');
+  const file = fileInput.files[0];
+  if(!file){ toast('Choose a file first'); return; }
+  if(!confirm('This will replace all current data. Continue?')) return;
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    try{
+      const parsed = JSON.parse(e.target.result);
+      if(!parsed.sessions || !parsed.routines){ toast('Invalid file'); return; }
+      if(!parsed.settings) parsed.settings = { restSeconds: 180 };
+      db = parsed;
+      saveDB();
+      closeOverlay('settingsOverlay');
+      renderAll();
+      toast('Data restored');
+    } catch(err){
+      toast('Could not read the file');
+    }
+  };
+  reader.readAsText(file);
+}
+
+/* ================= NAV / OVERLAYS ================= */
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  document.querySelector(`nav button[data-screen="${id}"]`).classList.add('active');
+}
+function closeOverlay(id){ document.getElementById(id).classList.remove('active'); }
+
+/* ================= INIT ================= */
+function renderAll(){
+  renderHeatmap();
+  renderSBD();
+  renderWeek();
+  renderRoutines();
+  renderStatGrid();
+  renderSessions();
+  renderActiveSessionBanner();
+}
+liveSession = loadActiveSession();
+renderAll();
+
+/* ================= PWA ================= */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+</script>
+
+</body>
+</html>
