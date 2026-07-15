@@ -32,28 +32,40 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Cache-first for app shell, falling back to network; network requests
-// outside the app shell are passed through untouched (no external calls
-// happen in this app, everything runs on localStorage).
+// Network-first for page navigations (index.html): always try to fetch the
+// latest version first so app updates show up immediately. Falls back to
+// the cached copy only when offline.
+// Cache-first for everything else (icons, manifest): they rarely change,
+// so serve instantly from cache and refresh the cache in the background.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request)
+  const isNavigation = event.request.mode === 'navigate' ||
+    (event.request.headers.get('accept') || '').includes('text/html');
+
+  if (isNavigation) {
+    event.respondWith(
+      fetch(event.request)
         .then((response) => {
-          if (response && response.status === 200 && response.type === 'basic') {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
           return response;
         })
-        .catch(() => {
-          if (event.request.mode === 'navigate') {
-            return caches.match('./index.html');
-          }
-        });
+        .catch(() => caches.match(event.request).then((cached) => cached || caches.match('./index.html')))
+    );
+    return;
+  }
+
+  event.respondWith(
+    caches.match(event.request).then((cached) => {
+      const network = fetch(event.request).then((response) => {
+        if (response && response.status === 200 && response.type === 'basic') {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
+        return response;
+      }).catch(() => cached);
+      return cached || network;
     })
   );
 });
