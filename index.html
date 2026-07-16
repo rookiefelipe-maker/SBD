@@ -184,13 +184,13 @@
   }
   .overlay-header h2{font-size:15px; font-weight:800; text-transform:uppercase; letter-spacing:1px;}
   .overlay-body{flex:1; overflow-y:auto; padding:16px; padding-bottom:110px;}
-  /* Live workout footer has 4 stacked buttons, so it needs extra bottom
-     clearance to avoid covering the last exercise(s) in the list. */
-  #liveWorkoutBody{padding-bottom:260px;}
+  #liveWorkoutBody{padding-bottom:150px;}
   .overlay-footer{
     position:fixed; bottom:0; left:0; right:0; padding:14px 16px; background:var(--black);
     border-top:1px solid var(--line); padding-bottom:calc(14px + env(safe-area-inset-bottom));
+    transition:transform .25s ease, opacity .2s ease;
   }
+  .overlay-footer.footer-hidden{ transform:translateY(120%); opacity:0; pointer-events:none; }
   .close-btn{background:none; border:none; color:var(--grey); font-size:22px; padding:4px 8px;}
 
   .field{margin-bottom:14px;}
@@ -252,6 +252,39 @@
     padding:9px 16px; border-radius:8px; font-size:12px; font-weight:700; white-space:nowrap;
   }
 
+  /* Live workout: floating actions menu button. Sits in the header's top-right
+     corner at rest; once the exercise list scrolls, it detaches into a round
+     floating action button so it stays reachable. */
+  .workout-menu-btn{
+    position:fixed; top:18px; right:60px; z-index:55;
+    width:34px; height:34px; border-radius:8px;
+    background:none; border:1px solid var(--line); color:var(--grey); font-size:16px;
+    transition:top .25s ease, bottom .25s ease, right .25s ease, width .25s ease, height .25s ease,
+      border-radius .25s ease, background .25s ease, box-shadow .25s ease, font-size .25s ease;
+  }
+  .workout-menu-btn.floating{
+    top:70px; right:16px; bottom:auto;
+    width:44px; height:44px; border-radius:50%;
+    background:var(--charcoal); box-shadow:0 8px 20px rgba(0,0,0,0.45); font-size:17px;
+  }
+  .action-menu-btn{
+    width:100%; background:var(--charcoal); color:var(--white); border:1px solid var(--line);
+    border-radius:10px; padding:13px; font-size:14px; font-weight:600; margin-bottom:10px; text-align:left;
+  }
+  .action-menu-btn:last-child{margin-bottom:0;}
+  .reorder-row{
+    display:flex; justify-content:space-between; align-items:center;
+    background:var(--charcoal); border:1px solid var(--line); border-radius:10px;
+    padding:10px 12px; margin-bottom:8px;
+  }
+  .reorder-row .name{font-size:13px; font-weight:600;}
+  .reorder-row .arrows{display:flex; align-items:center; gap:6px;}
+  .reorder-btn{
+    background:none; border:1px solid var(--line); color:var(--white);
+    width:30px; height:30px; border-radius:8px; font-size:13px;
+  }
+  .reorder-btn:disabled{opacity:0.3;}
+
   .chip-list{display:flex; flex-wrap:wrap; gap:8px;}
   .chip{
     background:var(--charcoal); border:1px solid var(--line); border-radius:20px; padding:8px 14px;
@@ -289,6 +322,25 @@
   .toast.show{opacity:1;}
 
   small.hint{color:var(--grey); font-size:11px; display:block; margin-top:4px;}
+
+  /* Small centered popups (session summary / PR celebration) — NOT full-screen overlays */
+  .modal-backdrop{
+    position:fixed; inset:0; background:rgba(0,0,0,0.72); z-index:80;
+    display:none; align-items:center; justify-content:center; padding:24px;
+  }
+  .modal-backdrop.active{display:flex;}
+  .modal-card{
+    background:var(--card); border:1px solid var(--line); border-radius:16px;
+    padding:22px 20px 20px; width:100%; max-width:320px; max-height:78vh; overflow-y:auto;
+    position:relative; animation:modalPop .2s ease;
+  }
+  @keyframes modalPop{from{opacity:0; transform:scale(0.9);} to{opacity:1; transform:scale(1);}}
+  .modal-close{
+    position:absolute; top:8px; right:8px; background:none; border:none;
+    color:var(--grey); font-size:22px; padding:6px 10px; line-height:1;
+  }
+  .modal-title{font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:1px; margin-bottom:14px; padding-right:26px;}
+  #confettiCanvas{position:fixed; inset:0; pointer-events:none; z-index:95; display:none;}
 </style>
 </head>
 <body>
@@ -364,19 +416,9 @@
       <label>Routine name</label>
       <input type="text" id="routineNameInput" placeholder="E.g. Push day">
     </div>
-    <div class="field">
-      <label>Exercises</label>
-      <div class="chip-list" id="routineExerciseChips"></div>
-      <small class="hint">Mark up to 2 exercises with a top set. Use × to remove, catalog below to add.</small>
-    </div>
-    <div class="field">
-      <label>Add exercise</label>
-      <div class="chip-list" id="catalogChips"></div>
-      <div style="display:flex; gap:8px; margin-top:10px;">
-        <input type="text" id="newExerciseInput" placeholder="New exercise...">
-        <button class="btn-secondary" onclick="addNewExerciseToCatalog()">Add</button>
-      </div>
-    </div>
+    <div id="routineExercisesWrap"></div>
+    <button class="btn-ghost" onclick="addDraftExercise()">+ Add exercise</button>
+    <datalist id="exerciseCatalogList"></datalist>
   </div>
   <div class="overlay-footer">
     <button class="btn-primary" onclick="saveRoutine()">Save routine</button>
@@ -390,13 +432,31 @@
     <h2 id="liveWorkoutTitle">Workout</h2>
     <button class="close-btn" onclick="minimizeWorkout()" title="Minimize">–</button>
   </div>
+  <button class="workout-menu-btn" id="workoutMenuBtn" onclick="openWorkoutMenu()" title="Workout actions">☰</button>
   <div class="overlay-body" id="liveWorkoutBody"></div>
-  <div class="overlay-footer">
-    <button class="btn-ghost" onclick="openExercisePicker()">+ Add exercise</button>
-    <button class="btn-ghost" onclick="openSupersetPicker()">⇄ Link superset</button>
-    <button class="btn-danger" style="width:100%; margin-top:6px;" onclick="discardWorkout()">Discard workout</button>
-
+  <div class="overlay-footer" id="liveWorkoutFooter">
+    <button class="btn-danger" style="width:100%; margin-bottom:6px;" onclick="discardWorkout()">Discard workout</button>
     <button class="btn-primary" onclick="finishWorkout()">Finish workout</button>
+  </div>
+</div>
+
+<!-- POPUP: Workout actions menu -->
+<div class="modal-backdrop" id="workoutMenuModal">
+  <div class="modal-card">
+    <button class="modal-close" onclick="closeWorkoutMenu()">×</button>
+    <div class="modal-title">Workout actions</div>
+    <button class="action-menu-btn" onclick="closeWorkoutMenu(); openExercisePicker();">+ Add exercise</button>
+    <button class="action-menu-btn" onclick="closeWorkoutMenu(); openSupersetPicker();">⇄ Link superset</button>
+    <button class="action-menu-btn" onclick="closeWorkoutMenu(); openReorderExercises();">☰ Reorder exercises</button>
+  </div>
+</div>
+
+<!-- POPUP: Reorder exercises -->
+<div class="modal-backdrop" id="reorderModal">
+  <div class="modal-card">
+    <button class="modal-close" onclick="closeReorderExercises()">×</button>
+    <div class="modal-title">Reorder exercises</div>
+    <div id="reorderList"></div>
   </div>
 </div>
 
@@ -407,6 +467,9 @@
     <button class="close-btn" onclick="closeOverlay('exercisePickerOverlay')">×</button>
   </div>
   <div class="overlay-body">
+    <div class="field">
+      <input type="text" id="exercisePickerSearch" placeholder="Search exercise..." oninput="filterExercisePicker()" autocomplete="off">
+    </div>
     <div id="exercisePickerList"></div>
     <div style="display:flex; gap:8px; margin-top:14px;">
       <input type="text" id="pickerNewExercise" placeholder="New exercise...">
@@ -436,7 +499,12 @@
     <h2>Edit workout</h2>
     <button class="close-btn" onclick="closeOverlay('editSessionOverlay')">×</button>
   </div>
-  <div class="overlay-body" id="editSessionBody"></div>
+  <div class="overlay-body" id="editSessionBody">
+    <div id="editMetaFields"></div>
+    <h2 class="title" style="margin-top:22px;">Exercises</h2>
+    <div id="editExercisesBody"></div>
+    <button class="btn-ghost" onclick="openExercisePicker(null, 'edit')">+ Add exercise</button>
+  </div>
   <div class="overlay-footer">
     <button class="btn-primary" onclick="saveEditedSession()">Save changes</button>
     <button class="btn-danger" style="width:100%; margin-top:8px;" onclick="deleteSession()">Delete workout</button>
@@ -470,7 +538,7 @@
     <div class="field">
       <label>Rest timer</label>
       <input type="number" id="restMinutesInput" step="0.5" min="0.5">
-      <small class="hint">Default rest time in minutes. Starts automatically after you complete a set.</small>
+      <small class="hint">Default rest time in minutes. Press "Start rest" to start it manually — if you don't start it within 5 seconds of logging a set, it'll start itself with an alert.</small>
     </div>
     <div class="field" style="margin-top:6px;">
       <button class="btn-secondary" style="width:100%;" onclick="saveRestSetting()">Save rest timer</button>
@@ -480,6 +548,11 @@
       <label>Export</label>
       <button class="btn-secondary" style="width:100%;" onclick="downloadBackup()">Download .json backup</button>
       <small class="hint">Saves all your data: routines, workouts, goals and exercise catalog.</small>
+    </div>
+    <div class="field" style="margin-top:22px;">
+      <label>Automatic backup on finish</label>
+      <button class="btn-secondary" style="width:100%;" onclick="chooseBackupFolder()">Choose backup folder</button>
+      <small class="hint" id="backupFolderStatus">No folder chosen yet. Each session will trigger a regular download instead.</small>
     </div>
     <div class="field" style="margin-top:22px;">
       <label>Import</label>
@@ -506,6 +579,25 @@
     <button class="btn-primary" onclick="editFromDetail()">Edit</button>
   </div>
 </div>
+
+<!-- POPUP: Session summary (shown right after finishing a workout) -->
+<div class="modal-backdrop" id="sessionSummaryOverlay">
+  <div class="modal-card">
+    <button class="modal-close" onclick="closeSessionSummary()">×</button>
+    <div class="modal-title">Workout summary</div>
+    <div id="sessionSummaryBody"></div>
+  </div>
+</div>
+
+<!-- POPUP: PR celebration (shown after the summary, only if there's a new PR) -->
+<div class="modal-backdrop" id="prCelebrationOverlay">
+  <div class="modal-card">
+    <button class="modal-close" onclick="closePRCelebration()">×</button>
+    <div class="modal-title">🏆 New PR!</div>
+    <div id="prCelebrationBody"></div>
+  </div>
+</div>
+<canvas id="confettiCanvas"></canvas>
 
 <div class="rest-fab-wrap" id="restFabWrap">
   <div class="rest-controls" id="restControls">
@@ -614,12 +706,14 @@ function lastPerformance(exerciseName){
 }
 // Basics are matched by exact name only (case/whitespace-insensitive) so
 // variants like "Pause Squat" or "Romanian Deadlift" never count toward the
-// SBD total — only the plain lift itself does.
+// SBD total — only the plain lift itself does. English AND Spanish names are
+// recognized so it doesn't matter which language you log your exercises in;
+// the UI labels themselves always stay in English (BASICS below).
 function normalizeName(n){ return n.trim().toLowerCase(); }
 const BASIC_ALIASES = {
-  squat: ['squat'],
-  bench: ['bench press', 'bench'],
-  deadlift: ['deadlift']
+  squat: ['squat', 'sentadilla', 'sentadillas'],
+  bench: ['bench press', 'bench', 'press banca', 'press de banca', 'banca'],
+  deadlift: ['deadlift', 'peso muerto', 'pesomuerto']
 };
 const BASICS = { squat:'Squat', bench:'Bench Press', deadlift:'Deadlift' };
 function prForBasic(key){
@@ -738,7 +832,7 @@ function renderRoutines(){
     div.innerHTML = `
       <div style="flex:1" onclick="startWorkout('${r.id}')">
         <h3>${r.name}</h3>
-        <p>${r.exercises.join(' · ')}</p>
+        <p>${r.exercises.map(e=> typeof e==='string' ? e : e.name).join(' · ')}</p>
       </div>
       <div style="display:flex; align-items:center; gap:10px;">
         <span class="del" onclick="event.stopPropagation(); openRoutineEditor('${r.id}')">Edit</span>
@@ -750,8 +844,20 @@ function renderRoutines(){
 }
 
 let editingRoutineId = null;
-let routineDraftExercises = [];
-let routineDraftTopSets = [];
+let routineDraftExercises = []; // [{name, sets, topSet}]
+
+// Backward compatible: old saved routines had exercises as an array of plain
+// name strings plus a separate topSetExercises array of names. New format
+// stores each exercise as {name, sets, topSet} directly.
+function normalizeRoutineExercises(r){
+  const topNames = r.topSetExercises || [];
+  return (r.exercises || []).map(e=>{
+    if(typeof e === 'string'){
+      return { name: e, sets: 1, topSet: topNames.includes(e) };
+    }
+    return { name: e.name, sets: e.sets || 1, topSet: !!e.topSet };
+  });
+}
 
 function openRoutineEditor(routineId){
   editingRoutineId = routineId || null;
@@ -761,85 +867,94 @@ function openRoutineEditor(routineId){
   if(routineId){
     const r = db.routines.find(x=>x.id===routineId);
     document.getElementById('routineNameInput').value = r.name;
-    routineDraftExercises = [...r.exercises];
-    routineDraftTopSets = [...(r.topSetExercises || [])];
+    routineDraftExercises = normalizeRoutineExercises(r);
   } else {
     document.getElementById('routineNameInput').value = '';
     routineDraftExercises = [];
-    routineDraftTopSets = [];
   }
-  renderRoutineDraftChips();
-  renderCatalogChips();
+  renderExerciseCatalogDatalist();
+  renderRoutineDraftExercises();
   overlay.classList.add('active');
 }
-function toggleTopSet(name){
-  const pos = routineDraftTopSets.indexOf(name);
-  if(pos>-1){ routineDraftTopSets.splice(pos,1); }
-  else{
-    if(routineDraftTopSets.length>=2){ toast('Max 2 top set exercises per routine'); return; }
-    routineDraftTopSets.push(name);
-  }
-  renderRoutineDraftChips();
+// The full exercise catalog is never shown as a visible list here — it only
+// powers the browser's native autofill dropdown on each name field.
+function renderExerciseCatalogDatalist(){
+  const dl = document.getElementById('exerciseCatalogList');
+  dl.innerHTML = db.exerciseCatalog.map(n=> `<option value="${n.replace(/"/g,'&quot;')}">`).join('');
 }
-function renderRoutineDraftChips(){
-  const wrap = document.getElementById('routineExerciseChips');
+function addDraftExercise(){
+  routineDraftExercises.push({ name:'', sets:3, topSet:false });
+  renderRoutineDraftExercises();
+  setTimeout(()=>{
+    const inputs = document.querySelectorAll('#routineExercisesWrap .draft-ex-name');
+    const last = inputs[inputs.length-1];
+    if(last) last.focus();
+  }, 30);
+}
+function removeDraftExerciseAt(idx){
+  routineDraftExercises.splice(idx,1);
+  renderRoutineDraftExercises();
+}
+function updateDraftExerciseName(idx, value){
+  routineDraftExercises[idx].name = value;
+}
+function changeDraftSets(idx, delta){
+  const ex = routineDraftExercises[idx];
+  ex.sets = Math.max(1, (ex.sets||1) + delta);
+  renderRoutineDraftExercises();
+}
+function toggleDraftTopSet(idx){
+  const ex = routineDraftExercises[idx];
+  const topCount = routineDraftExercises.filter(e=>e.topSet).length;
+  if(!ex.topSet && topCount>=2){ toast('Max 2 top set exercises per routine'); return; }
+  ex.topSet = !ex.topSet;
+  renderRoutineDraftExercises();
+}
+function renderRoutineDraftExercises(){
+  const wrap = document.getElementById('routineExercisesWrap');
   wrap.innerHTML = '';
   if(!routineDraftExercises.length){
-    wrap.innerHTML = '<small class="hint">No exercises added yet.</small>';
+    wrap.innerHTML = '<div class="empty">Add an exercise to get started.</div>';
     return;
   }
-  routineDraftExercises.forEach(name=>{
-    const row = document.createElement('div');
-    row.className = 'draft-exercise-row';
-    const isTop = routineDraftTopSets.includes(name);
-    row.innerHTML = `
-      <span class="draft-exercise-name">${name}</span>
-      <div class="draft-exercise-actions">
-        <button class="star-btn ${isTop?'active':''}" onclick="toggleTopSet('${name.replace(/'/g,"\\'")}')">${isTop ? '★ Top set' : '☆ Top set'}</button>
-        <button class="rm-chip" onclick="removeDraftExercise('${name.replace(/'/g,"\\'")}')">×</button>
+  routineDraftExercises.forEach((ex, idx)=>{
+    const block = document.createElement('div');
+    block.className = 'ex-block';
+    block.innerHTML = `
+      <div class="ex-block-top">
+        <div class="field" style="flex:1; margin-bottom:0;">
+          <input type="text" class="draft-ex-name" placeholder="Exercise name" value="${ex.name.replace(/"/g,'&quot;')}"
+            list="exerciseCatalogList" autocomplete="off"
+            oninput="updateDraftExerciseName(${idx}, this.value)">
+        </div>
+        <button class="rm-exercise" style="margin-left:10px; white-space:nowrap;" onclick="removeDraftExerciseAt(${idx})">Remove</button>
       </div>
+      <div class="set-row" style="justify-content:space-between; margin-top:8px;">
+        <span style="font-size:11px; color:var(--grey); text-transform:uppercase; letter-spacing:.5px;">Sets</span>
+        <div style="display:flex; align-items:center; gap:16px;">
+          <button class="rm-set" style="font-size:20px;" onclick="changeDraftSets(${idx},-1)">−</button>
+          <span style="min-width:18px; text-align:center; font-weight:800; font-size:16px;">${ex.sets}</span>
+          <button class="rm-set" style="font-size:20px;" onclick="changeDraftSets(${idx},1)">+</button>
+        </div>
+      </div>
+      <button class="star-btn ${ex.topSet?'active':''}" style="width:100%; margin-top:10px;" onclick="toggleDraftTopSet(${idx})">${ex.topSet ? '★ Top Set' : '☆ Top Set'}</button>
     `;
-    wrap.appendChild(row);
+    wrap.appendChild(block);
   });
-}
-function removeDraftExercise(name){
-  routineDraftExercises = routineDraftExercises.filter(n=>n!==name);
-  routineDraftTopSets = routineDraftTopSets.filter(n=>n!==name);
-  renderRoutineDraftChips();
-  renderCatalogChips();
-}
-function renderCatalogChips(){
-  const wrap = document.getElementById('catalogChips');
-  wrap.innerHTML = '';
-  db.exerciseCatalog.forEach(name=>{
-    if(routineDraftExercises.includes(name)) return;
-    const c = document.createElement('div');
-    c.className = 'chip';
-    c.textContent = name;
-    c.onclick = ()=>{ routineDraftExercises.push(name); renderRoutineDraftChips(); renderCatalogChips(); };
-    wrap.appendChild(c);
-  });
-}
-function addNewExerciseToCatalog(){
-  const input = document.getElementById('newExerciseInput');
-  const name = input.value.trim();
-  if(!name) return;
-  if(!db.exerciseCatalog.includes(name)) db.exerciseCatalog.push(name);
-  if(!routineDraftExercises.includes(name)) routineDraftExercises.push(name);
-  input.value = '';
-  saveDB();
-  renderRoutineDraftChips();
-  renderCatalogChips();
 }
 function saveRoutine(){
   const name = document.getElementById('routineNameInput').value.trim();
   if(!name){ toast('Give the routine a name'); return; }
-  if(!routineDraftExercises.length){ toast('Add at least one exercise'); return; }
+  const cleanExercises = routineDraftExercises
+    .map(e=> ({ name: e.name.trim(), sets: e.sets||1, topSet: !!e.topSet }))
+    .filter(e=> e.name);
+  if(!cleanExercises.length){ toast('Add at least one exercise'); return; }
+  cleanExercises.forEach(e=>{ if(!db.exerciseCatalog.includes(e.name)) db.exerciseCatalog.push(e.name); });
   if(editingRoutineId){
     const r = db.routines.find(x=>x.id===editingRoutineId);
-    r.name = name; r.exercises = [...routineDraftExercises]; r.topSetExercises = [...routineDraftTopSets];
+    r.name = name; r.exercises = cleanExercises; delete r.topSetExercises;
   } else {
-    db.routines.push({ id: uid('r'), name, exercises:[...routineDraftExercises], topSetExercises:[...routineDraftTopSets] });
+    db.routines.push({ id: uid('r'), name, exercises: cleanExercises });
   }
   saveDB();
   closeOverlay('routineEditorOverlay');
@@ -888,25 +1003,29 @@ function renderActiveSessionBanner(){
 
 function startWorkout(routineId){
   const r = db.routines.find(x=>x.id===routineId);
-  const topSetNames = r.topSetExercises || [];
+  const norm = normalizeRoutineExercises(r);
   liveSession = {
     routine: r.name,
     startedAt: Date.now(),
-    exercises: r.exercises.map(name=> ({
-      name, sets:[ {w:null, r:null, isTopSet:false} ], supersetGroup:null, supersetRole:null,
-      isTopSetExercise: topSetNames.includes(name)
+    exercises: norm.map(ex=> ({
+      name: ex.name,
+      sets: Array.from({length: Math.max(1, ex.sets||1)}, (_,i)=> ({ w:null, r:null, isTopSet: !!(ex.topSet && i===0) })),
+      supersetGroup:null, supersetRole:null,
+      isTopSetExercise: ex.topSet
     }))
   };
   saveActiveSession();
   document.getElementById('liveWorkoutTitle').textContent = r.name;
   renderLiveWorkout();
   document.getElementById('liveWorkoutOverlay').classList.add('active');
+  resetWorkoutScrollUI();
 }
 function resumeWorkout(){
   if(!liveSession) return;
   document.getElementById('liveWorkoutTitle').textContent = liveSession.routine;
   renderLiveWorkout();
   document.getElementById('liveWorkoutOverlay').classList.add('active');
+  resetWorkoutScrollUI();
 }
 function minimizeWorkout(){
   saveActiveSession();
@@ -915,6 +1034,7 @@ function minimizeWorkout(){
 }
 function discardWorkout(){
   if(!confirm('Discard this workout? Everything logged so far will be lost.')) return;
+  clearTimeout(pendingAutoRestTimeout);
   liveSession = null;
   stopRest();
   saveActiveSession();
@@ -926,6 +1046,79 @@ function startFreeWorkout(){
   document.getElementById('liveWorkoutTitle').textContent = 'Freestyle workout';
   renderLiveWorkout();
   document.getElementById('liveWorkoutOverlay').classList.add('active');
+  resetWorkoutScrollUI();
+}
+
+/* Floating actions menu + scroll-aware header/footer for the live workout */
+let workoutScrollLast = 0;
+function resetWorkoutScrollUI(){
+  const body = document.getElementById('liveWorkoutBody');
+  const menuBtn = document.getElementById('workoutMenuBtn');
+  const footer = document.getElementById('liveWorkoutFooter');
+  if(body) body.scrollTop = 0;
+  if(menuBtn) menuBtn.classList.remove('floating');
+  if(footer) footer.classList.remove('footer-hidden');
+  workoutScrollLast = 0;
+}
+function handleWorkoutScroll(){
+  const body = document.getElementById('liveWorkoutBody');
+  const menuBtn = document.getElementById('workoutMenuBtn');
+  const footer = document.getElementById('liveWorkoutFooter');
+  const st = Math.max(0, body.scrollTop);
+
+  // The menu button sits in the header corner at the very top of the list,
+  // and detaches into a floating round button once you've scrolled into it.
+  if(st > 24) menuBtn.classList.add('floating');
+  else menuBtn.classList.remove('floating');
+
+  // Finish/Discard hide while actively scrolling down, and come back as soon
+  // as you scroll up (or you're back near the top).
+  if(st > workoutScrollLast + 4 && st > 40){
+    footer.classList.add('footer-hidden');
+  } else if(st < workoutScrollLast - 4 || st <= 40){
+    footer.classList.remove('footer-hidden');
+  }
+  workoutScrollLast = st;
+}
+function openWorkoutMenu(){ document.getElementById('workoutMenuModal').classList.add('active'); }
+function closeWorkoutMenu(){ document.getElementById('workoutMenuModal').classList.remove('active'); }
+
+function openReorderExercises(){
+  renderReorderList();
+  document.getElementById('reorderModal').classList.add('active');
+}
+function closeReorderExercises(){
+  document.getElementById('reorderModal').classList.remove('active');
+  renderLiveWorkout();
+  saveActiveSession();
+}
+function renderReorderList(){
+  const wrap = document.getElementById('reorderList');
+  wrap.innerHTML = '';
+  if(!liveSession.exercises.length){
+    wrap.innerHTML = '<div class="empty">No exercises yet.</div>';
+    return;
+  }
+  liveSession.exercises.forEach((ex, idx)=>{
+    const row = document.createElement('div');
+    row.className = 'reorder-row';
+    row.innerHTML = `
+      <span class="name">${ex.name}</span>
+      <div class="arrows">
+        <button class="reorder-btn" ${idx===0 ? 'disabled' : ''} onclick="moveExercise(${idx},-1)">▲</button>
+        <button class="reorder-btn" ${idx===liveSession.exercises.length-1 ? 'disabled' : ''} onclick="moveExercise(${idx},1)">▼</button>
+      </div>
+    `;
+    wrap.appendChild(row);
+  });
+}
+function moveExercise(idx, dir){
+  const arr = liveSession.exercises;
+  const newIdx = idx + dir;
+  if(newIdx < 0 || newIdx >= arr.length) return;
+  [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+  renderReorderList();
+  saveActiveSession();
 }
 function renderLiveWorkout(){
   const body = document.getElementById('liveWorkoutBody');
@@ -1034,8 +1227,22 @@ function handleSetCompleted(exIdx){
   const ex = liveSession.exercises[exIdx];
   // Superset exercise A: no rest, go straight to exercise B.
   if(ex.supersetRole === 'a') return;
-  // Everything else (solo exercise, or exercise B of a pair): start rest.
-  startRest(db.settings.restSeconds);
+  // Everything else (solo exercise, or exercise B of a pair): give the user
+  // 5 seconds to start the rest timer manually. If they don't, it starts
+  // itself and lets them know with a notification + alert sound.
+  scheduleAutoRest();
+}
+let pendingAutoRestTimeout = null;
+function scheduleAutoRest(){
+  clearTimeout(pendingAutoRestTimeout);
+  pendingAutoRestTimeout = setTimeout(()=>{
+    if(!restActive){
+      startRest(db.settings.restSeconds);
+      vibrateRestEnd();
+      playAutoStartAlertSound();
+      toast('⏱ Timer started automatically');
+    }
+  }, 5000);
 }
 function removeExercise(exIdx){
   const ex = liveSession.exercises[exIdx];
@@ -1046,20 +1253,53 @@ function removeExercise(exIdx){
 }
 
 let pickerTargetExIdx = null; // null = adding new exercise, number = substituting
-function openExercisePicker(exIdx){
-  pickerTargetExIdx = (exIdx===undefined) ? null : exIdx;
+let pickerCtx = 'live'; // 'live' = live workout, 'edit' = editing a past session
+// Normalizes text for search: lowercase + strip accents, so "sentadilla" and
+// "iso-lateral" match regardless of case/diacritics.
+function normalizeSearch(s){
+  return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+}
+function openExercisePicker(exIdx, ctx){
+  pickerCtx = ctx || 'live';
+  pickerTargetExIdx = (exIdx===undefined || exIdx===null) ? null : exIdx;
+  const search = document.getElementById('exercisePickerSearch');
+  search.value = '';
+  renderExercisePickerList('');
+  document.getElementById('exercisePickerOverlay').classList.add('active');
+  setTimeout(()=> search.focus(), 50);
+}
+function filterExercisePicker(){
+  renderExercisePickerList(document.getElementById('exercisePickerSearch').value);
+}
+function renderExercisePickerList(query){
   const list = document.getElementById('exercisePickerList');
   list.innerHTML = '';
-  db.exerciseCatalog.forEach(name=>{
+  const q = normalizeSearch(query);
+  const matches = db.exerciseCatalog.filter(name=> normalizeSearch(name).includes(q));
+  if(!matches.length){
+    list.innerHTML = '<div class="empty" style="padding:24px 0;">No matches. Add it below as a new exercise.</div>';
+    return;
+  }
+  matches.forEach(name=>{
     const row = document.createElement('div');
     row.className = 'ex-picker-row';
     row.innerHTML = `<span>${name}</span>`;
     row.onclick = ()=> pickExercise(name);
     list.appendChild(row);
   });
-  document.getElementById('exercisePickerOverlay').classList.add('active');
 }
 function pickExercise(name){
+  if(pickerCtx === 'edit'){
+    if(pickerTargetExIdx===null){
+      editingSessionDraft.exercises.push({ name, sets:[{w:null,r:null,isTopSet:false}], supersetGroup:null, supersetRole:null, isTopSetExercise:false });
+    } else {
+      const ex = editingSessionDraft.exercises[pickerTargetExIdx];
+      ex.name = name;
+    }
+    closeOverlay('exercisePickerOverlay');
+    renderEditSessionBody();
+    return;
+  }
   if(pickerTargetExIdx===null){
     liveSession.exercises.push({ name, sets:[{w:null,r:null,isTopSet:false}], supersetGroup:null, supersetRole:null, isTopSetExercise:false });
   } else {
@@ -1142,23 +1382,133 @@ function finishWorkout(){
     .filter(ex=> ex.sets.length>0);
   if(!validExercises.length){
     if(!confirm('No sets logged. Finish anyway without saving?')) return;
+    clearTimeout(pendingAutoRestTimeout);
     liveSession = null; stopRest(); saveActiveSession(); closeOverlay('liveWorkoutOverlay'); return;
   }
+  // Snapshot the basics' PRs as they stood *before* this session is saved,
+  // so we can tell afterwards whether today broke any of them.
+  const prevPRs = {};
+  Object.keys(BASICS).forEach(key=>{ prevPRs[key] = prForBasic(key); });
+
   const durationMin = Math.max(1, Math.round((Date.now()-liveSession.startedAt)/60000));
-  db.sessions.push({
+  const newSession = {
     id: uid('s'),
     date: todayStr(),
     routine: liveSession.routine,
     durationMin,
     exercises: validExercises
-  });
+  };
+  db.sessions.push(newSession);
   saveDB();
+
+  const basicsSummary = computeBasicsSummary(newSession);
+  const newPRs = computeNewPRs(basicsSummary, prevPRs);
+
+  clearTimeout(pendingAutoRestTimeout);
   liveSession = null;
   stopRest();
   saveActiveSession();
   closeOverlay('liveWorkoutOverlay');
+  showScreen('dashboard');
   renderAll();
   toast('Workout saved');
+
+  autoBackupOnFinish();
+  showSessionSummaryPopup(durationMin, basicsSummary, newPRs);
+}
+
+/* Best set logged today for each basic (squat/bench/deadlift only) */
+function computeBasicsSummary(session){
+  const summary = {};
+  Object.keys(BASICS).forEach(key=>{
+    const aliases = BASIC_ALIASES[key];
+    let best = null;
+    session.exercises.forEach(e=>{
+      if(!aliases.includes(normalizeName(e.name))) return;
+      e.sets.forEach(set=>{
+        if(!best || set.w > best.w) best = { w:set.w, r:set.r };
+      });
+    });
+    summary[key] = best;
+  });
+  return summary;
+}
+/* Compares today's best basics against the PRs that existed before this
+   session was saved. A basic counts as a new PR if today's weight beats the
+   previous record — or if there was no previous record at all (first time
+   ever logging that basic is, by definition, a new best). */
+function computeNewPRs(summary, prevPRs){
+  const prs = [];
+  Object.keys(BASICS).forEach(key=>{
+    const s = summary[key];
+    if(!s) return;
+    const prev = prevPRs[key];
+    if(!prev || s.w > prev.weight){
+      prs.push({ key, name: BASICS[key], weight: s.w, reps: s.r, prevWeight: prev ? prev.weight : null });
+    }
+  });
+  return prs;
+}
+
+let pendingNewPRs = null;
+function showSessionSummaryPopup(durationMin, basicsSummary, newPRs){
+  pendingNewPRs = newPRs;
+  const body = document.getElementById('sessionSummaryBody');
+  let basicsHtml = '';
+  Object.keys(BASICS).forEach(key=>{
+    const s = basicsSummary[key];
+    if(!s) return;
+    basicsHtml += `
+      <div class="week-sbd-row">
+        <span class="lift">${BASICS[key]}</span>
+        <div class="figures">
+          <div class="w">${s.w} kg × ${s.r}</div>
+        </div>
+      </div>`;
+  });
+  if(!basicsHtml) basicsHtml = '<div class="empty">You didn\'t log squat, bench, or deadlift today.</div>';
+  body.innerHTML = `
+    <div class="card">
+      <div class="card-label">Duration</div>
+      <div class="total-hero">
+        <div><span class="big">${durationMin}</span><span class="unit">min</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-label">Today's basics</div>
+      ${basicsHtml}
+    </div>
+  `;
+  document.getElementById('sessionSummaryOverlay').classList.add('active');
+  playSessionCompleteSound();
+}
+function closeSessionSummary(){
+  closeOverlay('sessionSummaryOverlay');
+  const prs = pendingNewPRs;
+  pendingNewPRs = null;
+  if(prs && prs.length) showPRCelebration(prs);
+}
+function showPRCelebration(prs){
+  const body = document.getElementById('prCelebrationBody');
+  body.innerHTML = prs.map(pr=> `
+    <div class="card">
+      <div class="card-label">${pr.name}</div>
+      <div class="total-hero">
+        <div><span class="big">${pr.weight}</span><span class="unit">kg</span></div>
+      </div>
+      <div class="week-sbd-row" style="border-bottom:none; padding-top:0;">
+        <span class="lift">${pr.reps} reps</span>
+        <span class="empty-lift">${pr.prevWeight!=null ? 'Previous PR: '+pr.prevWeight+' kg' : 'First time logged!'}</span>
+      </div>
+    </div>
+  `).join('');
+  document.getElementById('prCelebrationOverlay').classList.add('active');
+  launchConfetti();
+  playWinSound();
+}
+function closePRCelebration(){
+  closeOverlay('prCelebrationOverlay');
+  stopConfetti();
 }
 
 /* Rest timer */
@@ -1199,6 +1549,153 @@ function vibrateRestEnd(){
     try{ navigator.vibrate([200,100,200]); } catch(e){}
   }
 }
+/* Countdown beep: fired once per second during the last 5 seconds of rest */
+function playCountdownBeep(){
+  const ctx = ensureAudioCtx();
+  if(!ctx) return;
+  try{
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 1000;
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.3, now+0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now+0.15);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now+0.16);
+  } catch(e){ /* audio not available */ }
+}
+/* Alert sound when the rest timer starts itself after the 5s grace period */
+function playAutoStartAlertSound(){
+  const ctx = ensureAudioCtx();
+  if(!ctx) return;
+  try{
+    const now = ctx.currentTime;
+    [0, 0.15].forEach(offset=>{
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = 660;
+      gain.gain.setValueAtTime(0.0001, now+offset);
+      gain.gain.exponentialRampToValueAtTime(0.25, now+offset+0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now+offset+0.12);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now+offset);
+      osc.stop(now+offset+0.13);
+    });
+  } catch(e){ /* audio not available */ }
+}
+/* Cheerful ascending arpeggio played when a new PR is celebrated */
+function playWinSound(){
+  const ctx = ensureAudioCtx();
+  if(!ctx) return;
+  try{
+    const now = ctx.currentTime;
+    const notes = [523.25, 659.25, 783.99, 1046.5]; // C5 E5 G5 C6
+    notes.forEach((freq, i)=>{
+      const offset = i*0.12;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, now+offset);
+      gain.gain.exponentialRampToValueAtTime(0.3, now+offset+0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now+offset+0.3);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now+offset);
+      osc.stop(now+offset+0.32);
+    });
+  } catch(e){ /* audio not available */ }
+}
+/* Short two-tone confirmation chime played when the session summary popup opens */
+function playSessionCompleteSound(){
+  const ctx = ensureAudioCtx();
+  if(!ctx) return;
+  try{
+    const now = ctx.currentTime;
+    const notes = [659.25, 880]; // E5, A5
+    notes.forEach((freq, i)=>{
+      const offset = i*0.11;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, now+offset);
+      gain.gain.exponentialRampToValueAtTime(0.28, now+offset+0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now+offset+0.24);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now+offset);
+      osc.stop(now+offset+0.26);
+    });
+  } catch(e){ /* audio not available */ }
+}
+
+/* Lightweight canvas confetti — no external libraries */
+let confettiRAF = null, confettiResizeHandler = null;
+function launchConfetti(){
+  const canvas = document.getElementById('confettiCanvas');
+  if(!canvas) return;
+  canvas.style.display = 'block';
+  const ctx = canvas.getContext('2d');
+  function resize(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+  resize();
+  confettiResizeHandler = resize;
+  window.addEventListener('resize', confettiResizeHandler);
+
+  const colors = ['#e0261b','#f5f5f0','#3fae5c','#3f8cae','#ffcc00'];
+  const particles = [];
+  const count = 130;
+  for(let i=0;i<count;i++){
+    particles.push({
+      x: canvas.width/2 + (Math.random()-0.5)*canvas.width*0.5,
+      y: -20 - Math.random()*canvas.height*0.4,
+      vx: (Math.random()-0.5)*4,
+      vy: Math.random()*2 + 2,
+      size: Math.random()*6+4,
+      color: colors[Math.floor(Math.random()*colors.length)],
+      rotation: Math.random()*360,
+      rotSpeed: (Math.random()-0.5)*10,
+      gravity: 0.05 + Math.random()*0.05
+    });
+  }
+  const start = performance.now();
+  function frame(now){
+    const elapsed = now - start;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    particles.forEach(p=>{
+      p.vy += p.gravity;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.rotation += p.rotSpeed;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rotation * Math.PI/180);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size*0.6);
+      ctx.restore();
+    });
+    if(elapsed < 3200){
+      confettiRAF = requestAnimationFrame(frame);
+    } else {
+      stopConfetti();
+    }
+  }
+  cancelAnimationFrame(confettiRAF);
+  confettiRAF = requestAnimationFrame(frame);
+}
+function stopConfetti(){
+  cancelAnimationFrame(confettiRAF);
+  confettiRAF = null;
+  if(confettiResizeHandler){ window.removeEventListener('resize', confettiResizeHandler); confettiResizeHandler = null; }
+  const canvas = document.getElementById('confettiCanvas');
+  if(canvas){
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    canvas.style.display = 'none';
+  }
+}
 
 /* Short tap feedback: pop sound + light vibration on interactive taps */
 function playPopSound(){
@@ -1230,7 +1727,10 @@ document.addEventListener('click', (e)=>{
   vibrateTap();
 }, true);
 
+let restActive = false;
 function startRest(seconds){
+  clearTimeout(pendingAutoRestTimeout);
+  restActive = true;
   restRemaining = seconds;
   document.getElementById('restFabWrap').classList.add('active');
   updateRestDisplay();
@@ -1238,6 +1738,7 @@ function startRest(seconds){
   restInterval = setInterval(()=>{
     restRemaining--;
     if(restRemaining<=0){ stopRest(); vibrateRestEnd(); playRestEndSound(); toast('Back to it!'); return; }
+    if(restRemaining<=5){ playCountdownBeep(); }
     updateRestDisplay();
   },1000);
 }
@@ -1251,6 +1752,7 @@ function updateRestDisplay(){
 function adjustRest(delta){ restRemaining = Math.max(0, restRemaining+delta); updateRestDisplay(); }
 function setRestDuration(seconds){ startRest(seconds); }
 function stopRest(){
+  restActive = false;
   clearInterval(restInterval);
   document.getElementById('restFabWrap').classList.remove('active');
   document.getElementById('restControls').classList.remove('open');
@@ -1294,7 +1796,7 @@ function renderSessions(){
     div.onclick = ()=> openSessionDetail(s.id);
     const dateFmt = new Date(s.date+'T00:00:00').toLocaleDateString('en-US', {day:'numeric', month:'short'});
     div.innerHTML = `
-      <div class="session-top"><span class="name">${s.routine}</span><span class="date">${dateFmt}</span></div>
+      <div class="session-top"><span class="name">${s.routine}</span><span class="date">${dateFmt} · ${s.durationMin} min</span></div>
       <div class="session-meta">
         <span><b>${s.exercises.length}</b> exercises</span>
         <span><b>${totalSets}</b> sets</span>
@@ -1318,7 +1820,7 @@ function openSessionDetail(sessionId){
   s.exercises.forEach(e=> e.sets.forEach(set=>{ vol += set.w*set.r; totalSets++; }));
   body.innerHTML = `
     <div class="card">
-      <div class="card-label">${dateFmt}</div>
+      <div class="card-label">${dateFmt} · ${s.durationMin} min</div>
       <div class="session-meta" style="font-size:12px;">
         <span><b>${s.durationMin}</b> min</span>
         <span><b>${s.exercises.length}</b> exercises</span>
@@ -1350,47 +1852,119 @@ function editFromDetail(){
   openEditSession(detailSessionId);
 }
 
-/* Edit past session */
+/* Edit past session — mirrors the live workout view: one card per exercise,
+   editable sets, and a star to mark a top set on any exercise (not just the
+   basics). Edits happen on a draft copy so closing without saving discards
+   them; nothing touches db.sessions until "Save changes" is pressed. */
 let editingSessionId = null;
+let editingSessionDraft = null;
 function openEditSession(sessionId){
   editingSessionId = sessionId;
   const s = db.sessions.find(x=>x.id===sessionId);
-  const body = document.getElementById('editSessionBody');
-  body.innerHTML = `
-    <div class="field"><label>Date</label><input type="date" id="editDate" value="${s.date}"></div>
-    <div class="field"><label>Routine</label><input type="text" id="editRoutine" value="${s.routine}"></div>
-    <div class="field"><label>Duration (min)</label><input type="number" id="editDuration" value="${s.durationMin}"></div>
+  // Deep clone so in-progress edits (added/removed exercises & sets) don't
+  // mutate the real session unless the user explicitly saves.
+  editingSessionDraft = JSON.parse(JSON.stringify(s));
+  renderEditSessionMeta();
+  renderEditSessionBody();
+  document.getElementById('editSessionOverlay').classList.add('active');
+}
+function renderEditSessionMeta(){
+  const s = editingSessionDraft;
+  document.getElementById('editMetaFields').innerHTML = `
+    <div class="field"><label>Date</label><input type="date" id="editDate" value="${s.date}" onchange="editingSessionDraft.date=this.value"></div>
+    <div class="field"><label>Routine</label><input type="text" id="editRoutine" value="${s.routine}" onchange="editingSessionDraft.routine=this.value"></div>
+    <div class="field"><label>Duration (min)</label><input type="number" id="editDuration" value="${s.durationMin}" onchange="editingSessionDraft.durationMin=parseInt(this.value)||editingSessionDraft.durationMin"></div>
   `;
-  s.exercises.forEach((ex, exIdx)=>{
+}
+function renderEditSessionBody(){
+  const body = document.getElementById('editExercisesBody');
+  body.innerHTML = '';
+  if(!editingSessionDraft.exercises.length){
+    body.innerHTML = '<div class="empty">No exercises. Add one below.</div>';
+    return;
+  }
+  editingSessionDraft.exercises.forEach((ex, exIdx)=>{
     const block = document.createElement('div');
     block.className = 'ex-block';
-    block.innerHTML = `<div class="ex-block-top"><h3>${ex.name}</h3></div><div id="editSets-${exIdx}"></div>`;
+    if(ex.supersetRole === 'a') block.classList.add('superset-a');
+    if(ex.supersetRole === 'b') block.classList.add('superset-b');
+    const supersetTag = ex.supersetRole ? `<div class="superset-tag">Superset ${ex.supersetRole.toUpperCase()}</div>` : '';
+    block.innerHTML = `
+      <div class="ex-block-top">
+        <div>
+          ${supersetTag}
+          <h3>${ex.name}</h3>
+        </div>
+        <div class="ex-actions">
+          <button class="swap-btn" onclick="openExercisePicker(${exIdx}, 'edit')">Substitute</button>
+          <button class="rm-exercise" onclick="removeEditExercise(${exIdx})">Remove</button>
+        </div>
+      </div>
+      <div id="editSets-${exIdx}"></div>
+      <button class="add-set-btn" onclick="addEditSet(${exIdx})">+ Set</button>
+    `;
     body.appendChild(block);
-    const wrap = block.querySelector(`#editSets-${exIdx}`);
-    ex.sets.forEach((set, setIdx)=>{
-      const row = document.createElement('div');
-      row.className = 'set-row';
-      row.innerHTML = `
-        <span class="idx">${setIdx+1}</span>
-        <input class="w-input" type="number" step="0.5" value="${set.w}" data-ex="${exIdx}" data-set="${setIdx}" data-field="w">
-        <span class="unit-lbl">kg</span>
-        <input class="r-input" type="number" value="${set.r}" data-ex="${exIdx}" data-set="${setIdx}" data-field="r">
-      `;
-      wrap.appendChild(row);
-    });
+    renderEditSets(exIdx);
   });
-  document.getElementById('editSessionOverlay').classList.add('active');
+}
+function renderEditSets(exIdx){
+  const wrap = document.getElementById('editSets-'+exIdx);
+  wrap.innerHTML = '';
+  const ex = editingSessionDraft.exercises[exIdx];
+  ex.sets.forEach((set, setIdx)=>{
+    const row = document.createElement('div');
+    row.className = 'set-row' + (set.isTopSet ? ' is-topset' : '');
+    row.innerHTML = `
+      <span class="idx">${setIdx+1}</span>
+      <button class="set-star ${set.isTopSet?'active':''}" onclick="toggleEditSetTopSet(${exIdx}, ${setIdx})">${set.isTopSet ? '★' : '☆'}</button>
+      <input class="w-input" type="number" inputmode="decimal" placeholder="kg" step="0.5" value="${set.w ?? ''}"
+        onchange="updateEditSet(${exIdx}, ${setIdx}, 'w', this.value)">
+      <span class="unit-lbl">kg</span>
+      <input class="r-input" type="number" inputmode="numeric" placeholder="reps" value="${set.r ?? ''}"
+        onchange="updateEditSet(${exIdx}, ${setIdx}, 'r', this.value)">
+      <button class="rm-set" onclick="removeEditSet(${exIdx}, ${setIdx})">×</button>
+    `;
+    wrap.appendChild(row);
+  });
+}
+function toggleEditSetTopSet(exIdx, setIdx){
+  const ex = editingSessionDraft.exercises[exIdx];
+  const wasTop = ex.sets[setIdx].isTopSet;
+  ex.sets.forEach(s=> s.isTopSet = false);
+  ex.sets[setIdx].isTopSet = !wasTop;
+  renderEditSets(exIdx);
+}
+function addEditSet(exIdx){
+  const sets = editingSessionDraft.exercises[exIdx].sets;
+  const prevSet = sets[sets.length-1];
+  sets.push({ w: prevSet ? prevSet.w : null, r: prevSet ? prevSet.r : null, isTopSet:false });
+  renderEditSets(exIdx);
+}
+function removeEditSet(exIdx, setIdx){
+  const sets = editingSessionDraft.exercises[exIdx].sets;
+  sets.splice(setIdx,1);
+  if(!sets.length) sets.push({w:null,r:null,isTopSet:false});
+  renderEditSets(exIdx);
+}
+function updateEditSet(exIdx, setIdx, field, value){
+  const v = value === '' ? null : parseFloat(value);
+  editingSessionDraft.exercises[exIdx].sets[setIdx][field] = v;
+}
+function removeEditExercise(exIdx){
+  editingSessionDraft.exercises.splice(exIdx,1);
+  renderEditSessionBody();
 }
 function saveEditedSession(){
   const s = db.sessions.find(x=>x.id===editingSessionId);
-  s.date = document.getElementById('editDate').value || s.date;
-  s.routine = document.getElementById('editRoutine').value.trim() || s.routine;
-  s.durationMin = parseInt(document.getElementById('editDuration').value) || s.durationMin;
-  document.querySelectorAll('#editSessionBody input[data-ex]').forEach(input=>{
-    const exIdx = parseInt(input.dataset.ex), setIdx = parseInt(input.dataset.set), field = input.dataset.field;
-    const val = parseFloat(input.value);
-    if(!isNaN(val)) s.exercises[exIdx].sets[setIdx][field] = val;
+  const idx = db.sessions.indexOf(s);
+  // Drop any incomplete sets (missing weight or reps) before persisting,
+  // same rule the live workout follows implicitly.
+  editingSessionDraft.exercises.forEach(ex=>{
+    ex.sets = ex.sets.filter(set=> set.w!=null && set.r!=null);
   });
+  editingSessionDraft.exercises = editingSessionDraft.exercises.filter(ex=> ex.sets.length>0);
+  if(!editingSessionDraft.exercises.length){ toast('Add at least one set before saving'); return; }
+  db.sessions[idx] = editingSessionDraft;
   saveDB();
   closeOverlay('editSessionOverlay');
   renderAll();
@@ -1443,6 +2017,91 @@ function resetAllData(){
   closeOverlay('settingsOverlay');
   renderAll();
   toast('Data deleted');
+}
+/* Persist a chosen backup folder (FileSystemDirectoryHandle) across reloads.
+   localStorage can't store handles, so a tiny IndexedDB store is used. */
+let backupDirHandle = null;
+const FS_IDB_NAME = 'sbd_tracker_fs';
+function openFsIDB(){
+  return new Promise((resolve,reject)=>{
+    const req = indexedDB.open(FS_IDB_NAME, 1);
+    req.onupgradeneeded = ()=> req.result.createObjectStore('handles');
+    req.onsuccess = ()=> resolve(req.result);
+    req.onerror = ()=> reject(req.error);
+  });
+}
+function idbSet(key, value){
+  return openFsIDB().then(dbi=> new Promise((resolve,reject)=>{
+    const tx = dbi.transaction('handles','readwrite');
+    tx.objectStore('handles').put(value, key);
+    tx.oncomplete = ()=>resolve();
+    tx.onerror = ()=>reject(tx.error);
+  }));
+}
+function idbGet(key){
+  return openFsIDB().then(dbi=> new Promise((resolve,reject)=>{
+    const tx = dbi.transaction('handles','readonly');
+    const req = tx.objectStore('handles').get(key);
+    req.onsuccess = ()=> resolve(req.result);
+    req.onerror = ()=> reject(req.error);
+  }));
+}
+async function chooseBackupFolder(){
+  if(!window.showDirectoryPicker){
+    toast('Your browser doesn\'t support choosing a folder; using regular download instead');
+    return;
+  }
+  try{
+    const handle = await window.showDirectoryPicker();
+    const perm = await handle.requestPermission({ mode:'readwrite' });
+    if(perm !== 'granted'){ toast('Permission denied'); return; }
+    backupDirHandle = handle;
+    await idbSet('backupDir', handle);
+    document.getElementById('backupFolderStatus').textContent = `Folder: ${handle.name}. Every backup will be saved there automatically.`;
+    toast('Backup folder saved');
+  } catch(e){ /* user cancelled the picker */ }
+}
+async function loadBackupFolder(){
+  const statusEl = document.getElementById('backupFolderStatus');
+  if(!window.showDirectoryPicker) return;
+  try{
+    const handle = await idbGet('backupDir');
+    if(!handle) return;
+    const perm = await handle.queryPermission({ mode:'readwrite' });
+    if(perm === 'granted'){
+      backupDirHandle = handle;
+      if(statusEl) statusEl.textContent = `Folder: ${handle.name}. Every backup will be saved there automatically.`;
+    } else if(statusEl){
+      statusEl.textContent = `Saved folder: ${handle.name} (tap "Choose backup folder" to re-grant permission)`;
+    }
+  } catch(e){ /* no folder saved yet, or handle no longer valid */ }
+}
+async function autoBackupOnFinish(){
+  const stamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+  const filename = `sbd-tracker-backup-${stamp}.json`;
+  const content = JSON.stringify(db, null, 2);
+  if(backupDirHandle){
+    try{
+      const perm = await backupDirHandle.requestPermission({ mode:'readwrite' });
+      if(perm === 'granted'){
+        const fileHandle = await backupDirHandle.getFileHandle(filename, { create:true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(content);
+        await writable.close();
+        toast('Backup saved to your folder');
+        return;
+      }
+    } catch(e){ /* fall through to plain download */ }
+  }
+  const blob = new Blob([content], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 function downloadBackup(){
   const blob = new Blob([JSON.stringify(db, null, 2)], {type:'application/json'});
@@ -1501,6 +2160,9 @@ function renderAll(){
 }
 liveSession = loadActiveSession();
 renderAll();
+loadBackupFolder();
+const _liveWorkoutBodyEl = document.getElementById('liveWorkoutBody');
+if(_liveWorkoutBodyEl) _liveWorkoutBodyEl.addEventListener('scroll', handleWorkoutScroll, {passive:true});
 
 /* ================= PWA ================= */
 if('serviceWorker' in navigator){
