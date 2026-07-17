@@ -215,19 +215,6 @@
     display:flex; align-items:center; gap:6px;
     font-size:10px; color:var(--blue); text-transform:uppercase; letter-spacing:.5px; font-weight:700; margin-bottom:4px;
   }
-  .info-btn{
-    display:inline-flex; align-items:center; justify-content:center;
-    width:17px; height:17px; border-radius:50%; border:1.5px solid var(--grey); color:var(--grey);
-    background:none; font-size:11px; font-weight:800; line-height:1; cursor:pointer; flex-shrink:0; font-style:italic;
-  }
-  .info-btn.alert{ border-color:var(--red); color:var(--red); animation:pulse-alert 1.6s ease-in-out infinite; }
-  @keyframes pulse-alert{ 0%,100%{box-shadow:0 0 0 0 rgba(224,38,27,.55);} 50%{box-shadow:0 0 0 6px rgba(224,38,27,0);} }
-  .progression-info{
-    display:none; margin-bottom:8px; padding:10px 12px; border-radius:10px; font-size:12px; line-height:1.4;
-    background:var(--charcoal); border:1px solid var(--line); color:var(--grey);
-  }
-  .progression-info.alert{ background:var(--red-dim); border-color:var(--red); color:var(--white); }
-  .progression-info.open{display:block;}
 
   .topset-tag{
     font-size:10px; color:var(--red); text-transform:uppercase; letter-spacing:0.5px; font-weight:700; margin-bottom:4px;
@@ -249,6 +236,11 @@
   .set-star{background:none; border:none; color:var(--grey); font-size:16px; width:22px;}
   .set-star.active{color:var(--red);}
   .set-row.is-topset{background:var(--red-dim); border-radius:8px; padding:4px 2px; margin-left:-2px; margin-right:-2px;}
+  .set-row.is-topset.progression-alert{ animation: topset-blink 1.1s ease-in-out infinite; }
+  @keyframes topset-blink{
+    0%, 100% { background:var(--red-dim); }
+    50% { background:var(--red); }
+  }
   .add-set-btn{
     width:100%; background:none; border:1px dashed var(--line); border-radius:8px;
     color:var(--grey); padding:9px; font-size:12px; margin-top:2px; text-transform:uppercase; letter-spacing:0.5px;
@@ -811,11 +803,6 @@ function progressionAlertFor(exerciseName, referenceDateStr){
   }
   return null;
 }
-function toggleProgressionInfo(exIdx){
-  const el = document.getElementById('pinfo-'+exIdx);
-  if(!el) return;
-  el.classList.toggle('open');
-}
 
 function toast(msg){
   const t = document.getElementById('toast');
@@ -1246,17 +1233,7 @@ function renderLiveWorkout(){
       supersetTag = `<div class="superset-tag">Superset ${ex.supersetRole.toUpperCase()}${partner ? ' · with '+partner.name : ''}</div>`;
     }
     const topSetTag = ex.isTopSetExercise ? `<div class="topset-tag">★ Top set exercise</div>` : '';
-    const progAlert = ex.isProgressionExercise ? progressionAlertFor(ex.name, todayStr()) : null;
-    const progressTag = ex.isProgressionExercise
-      ? `<div class="progress-tag">⬆ Progression <button type="button" class="info-btn ${progAlert?'alert':''}" onclick="toggleProgressionInfo(${exIdx})">i</button></div>`
-      : '';
-    const progressInfo = ex.isProgressionExercise
-      ? `<div class="progression-info ${progAlert?'alert':''}" id="pinfo-${exIdx}">${
-          progAlert
-            ? `⬆ Same top set (${progAlert.weight} kg × ${PROGRESSION_TARGET_REPS}) two weeks running — add weight this session.`
-            : `Progression tracking is on for this exercise. You'll get a nudge here once your top set repeats the same weight × ${PROGRESSION_TARGET_REPS} reps for two calendar weeks straight.`
-        }</div>`
-      : '';
+    const progressTag = ex.isProgressionExercise ? `<div class="progress-tag">⬆ Progression</div>` : '';
 
     block.innerHTML = `
       <div class="ex-block-top">
@@ -1275,7 +1252,6 @@ function renderLiveWorkout(){
           <button class="rm-exercise" onclick="removeExercise(${exIdx})">Remove</button>
         </div>
       </div>
-      ${progressInfo}
       <div id="sets-${exIdx}"></div>
       <button class="add-set-btn" onclick="addSet(${exIdx})">+ Set</button>
     `;
@@ -1287,9 +1263,14 @@ function renderSets(exIdx){
   const wrap = document.getElementById('sets-'+exIdx);
   wrap.innerHTML = '';
   const ex = liveSession.exercises[exIdx];
+  // If this exercise is flagged for progression and the same weight × 5 reps
+  // hit the top set two calendar weeks running, the top-set row blinks red
+  // instead of sitting on the usual fixed red-dim background.
+  const progAlert = ex.isProgressionExercise ? progressionAlertFor(ex.name, todayStr()) : null;
   ex.sets.forEach((set, setIdx)=>{
     const row = document.createElement('div');
-    row.className = 'set-row' + (set.isTopSet ? ' is-topset' : '');
+    const blink = set.isTopSet && progAlert ? ' progression-alert' : '';
+    row.className = 'set-row' + (set.isTopSet ? ' is-topset' : '') + blink;
     const starBtn = ex.isTopSetExercise
       ? `<button class="set-star ${set.isTopSet?'active':''}" onclick="toggleSetTopSet(${exIdx}, ${setIdx})">${set.isTopSet ? '★' : '☆'}</button>`
       : '';
