@@ -203,6 +203,32 @@
   .superset-tag{
     font-size:10px; color:var(--blue); text-transform:uppercase; letter-spacing:0.5px; font-weight:700; margin-bottom:4px;
   }
+  .toggle-row{display:flex; align-items:center; justify-content:space-between; padding:9px 2px;}
+  .toggle-row .toggle-label{font-size:13px; font-weight:700;}
+  .switch{position:relative; width:46px; height:27px; border-radius:14px; background:var(--line); flex-shrink:0; cursor:pointer; transition:background .18s ease;}
+  .switch .knob{position:absolute; top:2px; left:2px; width:23px; height:23px; border-radius:50%; background:var(--white); transition:left .18s ease; box-shadow:0 1px 3px rgba(0,0,0,.4);}
+  .switch.on{background:var(--green);}
+  .switch.on .knob{left:21px;}
+  .switch.disabled{opacity:.35; cursor:not-allowed;}
+
+  .progress-tag{
+    display:flex; align-items:center; gap:6px;
+    font-size:10px; color:var(--blue); text-transform:uppercase; letter-spacing:.5px; font-weight:700; margin-bottom:4px;
+  }
+  .info-btn{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:17px; height:17px; border-radius:50%; border:1.5px solid var(--grey); color:var(--grey);
+    background:none; font-size:11px; font-weight:800; line-height:1; cursor:pointer; flex-shrink:0; font-style:italic;
+  }
+  .info-btn.alert{ border-color:var(--red); color:var(--red); animation:pulse-alert 1.6s ease-in-out infinite; }
+  @keyframes pulse-alert{ 0%,100%{box-shadow:0 0 0 0 rgba(224,38,27,.55);} 50%{box-shadow:0 0 0 6px rgba(224,38,27,0);} }
+  .progression-info{
+    display:none; margin-bottom:8px; padding:10px 12px; border-radius:10px; font-size:12px; line-height:1.4;
+    background:var(--charcoal); border:1px solid var(--line); color:var(--grey);
+  }
+  .progression-info.alert{ background:var(--red-dim); border-color:var(--red); color:var(--white); }
+  .progression-info.open{display:block;}
+
   .topset-tag{
     font-size:10px; color:var(--red); text-transform:uppercase; letter-spacing:0.5px; font-weight:700; margin-bottom:4px;
   }
@@ -709,7 +735,13 @@ function lastPerformance(exerciseName){
 // SBD total — only the plain lift itself does. English AND Spanish names are
 // recognized so it doesn't matter which language you log your exercises in;
 // the UI labels themselves always stay in English (BASICS below).
-function normalizeName(n){ return n.trim().toLowerCase(); }
+function normalizeName(n){
+  return n
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'') // strip accents (á->a, etc.)
+    .replace(/\s+/g,' ')                              // collapse any whitespace, incl. stray NBSP
+    .trim()
+    .toLowerCase();
+}
 const BASIC_ALIASES = {
   squat: ['squat', 'sentadilla', 'sentadillas'],
   bench: ['bench press', 'bench', 'press banca', 'press de banca', 'banca'],
@@ -730,6 +762,60 @@ function currentSBD(){
 function goalSBD(){ return (db.goals.squat||0)+(db.goals.bench||0)+(db.goals.deadlift||0); }
 function dateOnly(d){ return new Date(d+'T00:00:00'); }
 function daysBetween(a,b){ return Math.round((dateOnly(a)-dateOnly(b))/86400000); }
+
+/* ============= PROGRESSION TRACKING =============
+   For exercises flagged "progression" in their routine, we watch the TOP SET
+   only (isTopSet===true) and compare it week over week using calendar weeks
+   (Monday-start). Reps are always checked against a fixed target of 5 — this
+   is a linear-progression scheme (e.g. 5/3/1-style basics), not a generic
+   "same as last time" comparison. If the same weight × 5 reps shows up on
+   the top set in two consecutive calendar weeks, the exercise is flagged so
+   that on the 3rd week the app nudges the lifter to add weight. */
+const PROGRESSION_TARGET_REPS = 5;
+function weekKeyForDate(dateStr){
+  const d = dateOnly(dateStr);
+  const dow = (d.getDay()+6)%7; // Monday = 0
+  d.setDate(d.getDate()-dow);
+  return d.toISOString().slice(0,10); // Monday of that week, used as the week key
+}
+function topSetWeeklyHistory(exerciseName){
+  const norm = normalizeName(exerciseName);
+  const map = {}; // weekKey -> {weight, reps, date}
+  db.sessions.slice().sort((a,b)=> a.date.localeCompare(b.date)).forEach(s=>{
+    s.exercises.forEach(e=>{
+      if(normalizeName(e.name)!==norm) return;
+      const top = (e.sets||[]).find(x=>x.isTopSet);
+      if(!top || top.w==null || top.r==null) return;
+      // if trained more than once in the same calendar week, keep the latest
+      map[weekKeyForDate(s.date)] = { weight: top.w, reps: top.r, date: s.date };
+    });
+  });
+  return map;
+}
+/* Returns {weight} if this exercise's top set matched the same weight and
+   PROGRESSION_TARGET_REPS reps in the two calendar weeks immediately before
+   referenceDateStr's week — i.e. it's time to add weight this session.
+   Returns null otherwise (no data, gap in weeks, or reps/weight changed). */
+function progressionAlertFor(exerciseName, referenceDateStr){
+  const map = topSetWeeklyHistory(exerciseName);
+  const refWeek = weekKeyForDate(referenceDateStr);
+  const weeks = Object.keys(map).filter(w=> w < refWeek).sort();
+  if(weeks.length < 2) return null;
+  const lastWeek = weeks[weeks.length-1];
+  const prevWeek = weeks[weeks.length-2];
+  const gapDays = Math.round((dateOnly(lastWeek)-dateOnly(prevWeek))/86400000);
+  if(gapDays !== 7) return null; // must be back-to-back calendar weeks, no gaps
+  const a = map[prevWeek], b = map[lastWeek];
+  if(a.weight===b.weight && a.reps===PROGRESSION_TARGET_REPS && b.reps===PROGRESSION_TARGET_REPS){
+    return { weight: a.weight };
+  }
+  return null;
+}
+function toggleProgressionInfo(exIdx){
+  const el = document.getElementById('pinfo-'+exIdx);
+  if(!el) return;
+  el.classList.toggle('open');
+}
 
 function toast(msg){
   const t = document.getElementById('toast');
@@ -853,9 +939,9 @@ function normalizeRoutineExercises(r){
   const topNames = r.topSetExercises || [];
   return (r.exercises || []).map(e=>{
     if(typeof e === 'string'){
-      return { name: e, sets: 1, topSet: topNames.includes(e) };
+      return { name: e, sets: 1, topSet: topNames.includes(e), progression: false };
     }
-    return { name: e.name, sets: e.sets || 1, topSet: !!e.topSet };
+    return { name: e.name, sets: e.sets || 1, topSet: !!e.topSet, progression: !!e.progression };
   });
 }
 
@@ -883,7 +969,7 @@ function renderExerciseCatalogDatalist(){
   dl.innerHTML = db.exerciseCatalog.map(n=> `<option value="${n.replace(/"/g,'&quot;')}">`).join('');
 }
 function addDraftExercise(){
-  routineDraftExercises.push({ name:'', sets:3, topSet:false });
+  routineDraftExercises.push({ name:'', sets:3, topSet:false, progression:false });
   renderRoutineDraftExercises();
   setTimeout(()=>{
     const inputs = document.querySelectorAll('#routineExercisesWrap .draft-ex-name');
@@ -908,6 +994,13 @@ function toggleDraftTopSet(idx){
   const topCount = routineDraftExercises.filter(e=>e.topSet).length;
   if(!ex.topSet && topCount>=2){ toast('Max 2 top set exercises per routine'); return; }
   ex.topSet = !ex.topSet;
+  if(!ex.topSet) ex.progression = false; // progression needs a top set to compare
+  renderRoutineDraftExercises();
+}
+function toggleDraftProgression(idx){
+  const ex = routineDraftExercises[idx];
+  if(!ex.topSet){ toast('Enable Top Set first'); return; }
+  ex.progression = !ex.progression;
   renderRoutineDraftExercises();
 }
 function renderRoutineDraftExercises(){
@@ -937,7 +1030,14 @@ function renderRoutineDraftExercises(){
           <button class="rm-set" style="font-size:20px;" onclick="changeDraftSets(${idx},1)">+</button>
         </div>
       </div>
-      <button class="star-btn ${ex.topSet?'active':''}" style="width:100%; margin-top:10px;" onclick="toggleDraftTopSet(${idx})">${ex.topSet ? '★ Top Set' : '☆ Top Set'}</button>
+      <div class="toggle-row" style="margin-top:6px;">
+        <span class="toggle-label">Top Set</span>
+        <div class="switch ${ex.topSet?'on':''}" onclick="toggleDraftTopSet(${idx})"><div class="knob"></div></div>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Progression</span>
+        <div class="switch ${ex.progression?'on':''} ${!ex.topSet?'disabled':''}" onclick="toggleDraftProgression(${idx})"><div class="knob"></div></div>
+      </div>
     `;
     wrap.appendChild(block);
   });
@@ -946,7 +1046,7 @@ function saveRoutine(){
   const name = document.getElementById('routineNameInput').value.trim();
   if(!name){ toast('Give the routine a name'); return; }
   const cleanExercises = routineDraftExercises
-    .map(e=> ({ name: e.name.trim(), sets: e.sets||1, topSet: !!e.topSet }))
+    .map(e=> ({ name: e.name.trim(), sets: e.sets||1, topSet: !!e.topSet, progression: !!e.topSet && !!e.progression }))
     .filter(e=> e.name);
   if(!cleanExercises.length){ toast('Add at least one exercise'); return; }
   cleanExercises.forEach(e=>{ if(!db.exerciseCatalog.includes(e.name)) db.exerciseCatalog.push(e.name); });
@@ -1011,7 +1111,8 @@ function startWorkout(routineId){
       name: ex.name,
       sets: Array.from({length: Math.max(1, ex.sets||1)}, (_,i)=> ({ w:null, r:null, isTopSet: !!(ex.topSet && i===0) })),
       supersetGroup:null, supersetRole:null,
-      isTopSetExercise: ex.topSet
+      isTopSetExercise: ex.topSet,
+      isProgressionExercise: !!ex.progression
     }))
   };
   saveActiveSession();
@@ -1145,12 +1246,24 @@ function renderLiveWorkout(){
       supersetTag = `<div class="superset-tag">Superset ${ex.supersetRole.toUpperCase()}${partner ? ' · with '+partner.name : ''}</div>`;
     }
     const topSetTag = ex.isTopSetExercise ? `<div class="topset-tag">★ Top set exercise</div>` : '';
+    const progAlert = ex.isProgressionExercise ? progressionAlertFor(ex.name, todayStr()) : null;
+    const progressTag = ex.isProgressionExercise
+      ? `<div class="progress-tag">⬆ Progression <button type="button" class="info-btn ${progAlert?'alert':''}" onclick="toggleProgressionInfo(${exIdx})">i</button></div>`
+      : '';
+    const progressInfo = ex.isProgressionExercise
+      ? `<div class="progression-info ${progAlert?'alert':''}" id="pinfo-${exIdx}">${
+          progAlert
+            ? `⬆ Same top set (${progAlert.weight} kg × ${PROGRESSION_TARGET_REPS}) two weeks running — add weight this session.`
+            : `Progression tracking is on for this exercise. You'll get a nudge here once your top set repeats the same weight × ${PROGRESSION_TARGET_REPS} reps for two calendar weeks straight.`
+        }</div>`
+      : '';
 
     block.innerHTML = `
       <div class="ex-block-top">
         <div>
           ${supersetTag}
           ${topSetTag}
+          ${progressTag}
           <h3>${ex.name}</h3>
           <div class="last">${lastStr}</div>
           ${prStr ? `<div class="pr">${prStr}</div>` : ''}
@@ -1162,6 +1275,7 @@ function renderLiveWorkout(){
           <button class="rm-exercise" onclick="removeExercise(${exIdx})">Remove</button>
         </div>
       </div>
+      ${progressInfo}
       <div id="sets-${exIdx}"></div>
       <button class="add-set-btn" onclick="addSet(${exIdx})">+ Set</button>
     `;
@@ -1307,6 +1421,7 @@ function pickExercise(name){
     if(ex.supersetGroup) unlinkSuperset(pickerTargetExIdx, true);
     ex.name = name;
     ex.sets = [{w:null,r:null,isTopSet:false}];
+    ex.isProgressionExercise = false;
   }
   closeOverlay('exercisePickerOverlay');
   renderLiveWorkout();
