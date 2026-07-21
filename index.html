@@ -20,6 +20,7 @@
     --line:#2a2a2a;
     --red:#e0261b;
     --red-dim:#7a1510;
+    --gold:#e0b02a;
     --white:#f5f5f0;
     --grey:#8a8a85;
     --green:#3fae5c;
@@ -226,6 +227,7 @@
   .ex-actions{display:flex; flex-direction:column; align-items:flex-end; gap:6px;}
   .swap-btn{background:none; border:none; color:var(--red); font-size:11px; text-transform:uppercase; letter-spacing:0.5px;}
   .link-btn{background:none; border:none; color:var(--blue); font-size:11px; text-transform:uppercase; letter-spacing:0.5px;}
+  .edit-exercise-btn{background:none; border:1px solid var(--line); color:var(--grey); font-size:11px; text-transform:uppercase; letter-spacing:0.5px; padding:5px 8px; border-radius:6px;}
   .set-row{display:flex; align-items:center; gap:8px; margin-bottom:8px;}
   .set-row .idx{width:20px; font-size:12px; color:var(--grey); text-align:center;}
   .set-row input{text-align:center; padding:10px 6px;}
@@ -239,7 +241,7 @@
   .set-row.is-topset.progression-alert{ animation: topset-blink 1.1s ease-in-out infinite; }
   @keyframes topset-blink{
     0%, 100% { background:var(--red-dim); }
-    50% { background:var(--red); }
+    50% { background:var(--gold); }
   }
   .add-set-btn{
     width:100%; background:none; border:1px dashed var(--line); border-radius:8px;
@@ -466,6 +468,15 @@
     <button class="action-menu-btn" onclick="closeWorkoutMenu(); openExercisePicker();">+ Add exercise</button>
     <button class="action-menu-btn" onclick="closeWorkoutMenu(); openSupersetPicker();">⇄ Link superset</button>
     <button class="action-menu-btn" onclick="closeWorkoutMenu(); openReorderExercises();">☰ Reorder exercises</button>
+  </div>
+</div>
+
+<!-- POPUP: Per-exercise edit menu (Substitute / Unlink / Remove) -->
+<div class="modal-backdrop" id="exerciseMenuModal">
+  <div class="modal-card">
+    <button class="modal-close" onclick="closeExerciseMenu()">×</button>
+    <div class="modal-title" id="exerciseMenuTitle">Exercise</div>
+    <div id="exerciseMenuActions"></div>
   </div>
 </div>
 
@@ -1170,6 +1181,19 @@ function handleWorkoutScroll(){
 }
 function openWorkoutMenu(){ document.getElementById('workoutMenuModal').classList.add('active'); }
 function closeWorkoutMenu(){ document.getElementById('workoutMenuModal').classList.remove('active'); }
+function openExerciseMenu(exIdx){
+  const ex = liveSession.exercises[exIdx];
+  if(!ex) return;
+  document.getElementById('exerciseMenuTitle').textContent = ex.name;
+  const actions = document.getElementById('exerciseMenuActions');
+  actions.innerHTML = `
+    <button class="action-menu-btn" onclick="closeExerciseMenu(); openExercisePicker(${exIdx});">⇄ Substitute</button>
+    ${ex.supersetGroup ? `<button class="action-menu-btn" onclick="closeExerciseMenu(); unlinkSuperset(${exIdx});">✕ Unlink superset</button>` : ''}
+    <button class="action-menu-btn" style="color:var(--red);" onclick="closeExerciseMenu(); removeExercise(${exIdx});">🗑 Remove exercise</button>
+  `;
+  document.getElementById('exerciseMenuModal').classList.add('active');
+}
+function closeExerciseMenu(){ document.getElementById('exerciseMenuModal').classList.remove('active'); }
 
 function openReorderExercises(){
   renderReorderList();
@@ -1247,9 +1271,7 @@ function renderLiveWorkout(){
         </div>
         <div class="ex-actions">
           <button class="timer-btn" onclick="startManualRest(${exIdx})">⏱ Start rest</button>
-          <button class="swap-btn" onclick="openExercisePicker(${exIdx})">Substitute</button>
-          ${ex.supersetGroup ? `<button class="link-btn" onclick="unlinkSuperset(${exIdx})">Unlink</button>` : ''}
-          <button class="rm-exercise" onclick="removeExercise(${exIdx})">Remove</button>
+          <button class="edit-exercise-btn" onclick="openExerciseMenu(${exIdx})">✎ Edit</button>
         </div>
       </div>
       <div id="sets-${exIdx}"></div>
@@ -1269,7 +1291,12 @@ function renderSets(exIdx){
   const progAlert = ex.isProgressionExercise ? progressionAlertFor(ex.name, todayStr()) : null;
   ex.sets.forEach((set, setIdx)=>{
     const row = document.createElement('div');
-    const blink = set.isTopSet && progAlert ? ' progression-alert' : '';
+    // Once the lifter actually logs a heavier weight AND at least 1 rep for
+    // this set, stop blinking — a lone weight typed in (with reps still
+    // empty) shouldn't be enough to silence the alert, since it could be an
+    // accidental keystroke and not a completed set.
+    const alreadyProgressed = progAlert && set.w!=null && set.w > progAlert.weight && set.r!=null && set.r > 0;
+    const blink = set.isTopSet && progAlert && !alreadyProgressed ? ' progression-alert' : '';
     row.className = 'set-row' + (set.isTopSet ? ' is-topset' : '') + blink;
     const starBtn = ex.isTopSetExercise
       ? `<button class="set-star ${set.isTopSet?'active':''}" onclick="toggleSetTopSet(${exIdx}, ${setIdx})">${set.isTopSet ? '★' : '☆'}</button>`
@@ -1312,6 +1339,11 @@ function updateSet(exIdx, setIdx, field, value){
   const v = value === '' ? null : parseFloat(value);
   liveSession.exercises[exIdx].sets[setIdx][field] = v;
   saveActiveSession();
+
+  // Re-render this exercise's rows so the topset blink turns off immediately
+  // once the new (heavier) weight has been logged, instead of only updating
+  // after leaving and re-entering the workout.
+  renderSets(exIdx);
 
   const set = liveSession.exercises[exIdx].sets[setIdx];
   if(set.w != null && set.r != null && set.w > 0 && set.r > 0){
