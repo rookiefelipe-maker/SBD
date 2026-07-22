@@ -757,6 +757,16 @@ function prForBasic(key){
   if(!sets.length) return null;
   return sets.reduce((a,b)=> b.weight > a.weight ? b : a);
 }
+/* Estimated 1-rep max via the Epley formula: w * (1 + r/30).
+   It's the standard quick estimate for a set of straight reps and good
+   enough for tracking e1RM trends over time. */
+function epley1RM(w, r){
+  if(w==null || r==null) return null;
+  return w * (1 + r/30);
+}
+function fmt1RM(v){
+  return (Math.round(v*10)/10).toString().replace(/\.0$/,'');
+}
 function currentSBD(){
   let total = 0;
   Object.keys(BASICS).forEach(key=>{ const pr = prForBasic(key); if(pr) total += pr.weight; });
@@ -1526,10 +1536,14 @@ function finishWorkout(){
     durationMin,
     exercises: validExercises
   };
+  // Basics summary (best set + estimated e1RM per basic) is computed now and
+  // saved onto the session itself, so it's part of the permanent history —
+  // the same as everything else finishWorkout stores.
+  const basicsSummary = computeBasicsSummary(newSession);
+  newSession.basicsSummary = basicsSummary;
   db.sessions.push(newSession);
   saveDB();
 
-  const basicsSummary = computeBasicsSummary(newSession);
   const newPRs = computeNewPRs(basicsSummary, prevPRs);
 
   clearTimeout(pendingAutoRestTimeout);
@@ -1545,18 +1559,25 @@ function finishWorkout(){
   showSessionSummaryPopup(durationMin, basicsSummary, newPRs);
 }
 
-/* Best set logged today for each basic (squat/bench/deadlift only) */
+/* Best set logged today for each basic (squat/bench/deadlift only), plus
+   the session's estimated 1RM for that basic (Epley formula, taken from
+   whichever set of the day scored the highest e1RM — not necessarily the
+   heaviest single set, since a slightly lighter set for more reps can
+   estimate a higher 1RM). */
 function computeBasicsSummary(session){
   const summary = {};
   Object.keys(BASICS).forEach(key=>{
     const aliases = BASIC_ALIASES[key];
-    let best = null;
+    let best = null, bestE1RM = null;
     session.exercises.forEach(e=>{
       if(!aliases.includes(normalizeName(e.name))) return;
       e.sets.forEach(set=>{
         if(!best || set.w > best.w) best = { w:set.w, r:set.r };
+        const e1rm = epley1RM(set.w, set.r);
+        if(e1rm!=null && (bestE1RM==null || e1rm > bestE1RM)) bestE1RM = e1rm;
       });
     });
+    if(best) best.e1rm = bestE1RM;
     summary[key] = best;
   });
   return summary;
@@ -1586,11 +1607,13 @@ function showSessionSummaryPopup(durationMin, basicsSummary, newPRs){
   Object.keys(BASICS).forEach(key=>{
     const s = basicsSummary[key];
     if(!s) return;
+    const e1rmHtml = s.e1rm!=null ? `<div class="meta">e1RM ≈ ${fmt1RM(s.e1rm)} kg</div>` : '';
     basicsHtml += `
       <div class="week-sbd-row">
         <span class="lift">${BASICS[key]}</span>
         <div class="figures">
           <div class="w">${s.w} kg × ${s.r}</div>
+          ${e1rmHtml}
         </div>
       </div>`;
   });
@@ -1946,6 +1969,29 @@ function openSessionDetail(sessionId){
   const body = document.getElementById('sessionDetailBody');
   let vol=0, totalSets=0;
   s.exercises.forEach(e=> e.sets.forEach(set=>{ vol += set.w*set.r; totalSets++; }));
+  // Basics e1RM: use the stored value if this session already has one
+  // (saved since the Epley e1RM feature shipped); otherwise recompute it
+  // on the fly from the saved sets, so older sessions show it too.
+  const basicsSummary = s.basicsSummary || computeBasicsSummary(s);
+  let basicsHtml = '';
+  Object.keys(BASICS).forEach(key=>{
+    const bs = basicsSummary[key];
+    if(!bs) return;
+    const e1rmHtml = bs.e1rm!=null ? `<div class="meta">e1RM ≈ ${fmt1RM(bs.e1rm)} kg</div>` : '';
+    basicsHtml += `
+      <div class="week-sbd-row">
+        <span class="lift">${BASICS[key]}</span>
+        <div class="figures">
+          <div class="w">${bs.w} kg × ${bs.r}</div>
+          ${e1rmHtml}
+        </div>
+      </div>`;
+  });
+  const basicsCard = basicsHtml ? `
+    <div class="card">
+      <div class="card-label">Basics · estimated 1RM</div>
+      ${basicsHtml}
+    </div>` : '';
   body.innerHTML = `
     <div class="card">
       <div class="card-label">${dateFmt} · ${s.durationMin} min</div>
@@ -1956,6 +2002,7 @@ function openSessionDetail(sessionId){
         <span><b>${Math.round(vol).toLocaleString('en-US')}</b> kg vol.</span>
       </div>
     </div>
+    ${basicsCard}
   `;
   s.exercises.forEach(ex=>{
     const block = document.createElement('div');
