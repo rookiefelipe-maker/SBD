@@ -468,6 +468,7 @@
     <button class="action-menu-btn" onclick="closeWorkoutMenu(); openExercisePicker();">+ Add exercise</button>
     <button class="action-menu-btn" onclick="closeWorkoutMenu(); openSupersetPicker();">⇄ Link superset</button>
     <button class="action-menu-btn" onclick="closeWorkoutMenu(); openReorderExercises();">☰ Reorder exercises</button>
+    <button class="action-menu-btn" id="updateRoutineBtn" onclick="closeWorkoutMenu(); updateRoutineFromWorkout();">💾 Update routine</button>
   </div>
 </div>
 
@@ -606,6 +607,7 @@
   <div class="overlay-body" id="sessionDetailBody"></div>
   <div class="overlay-footer">
     <button class="btn-primary" onclick="editFromDetail()">Edit</button>
+    <button class="btn-danger" style="width:100%; margin-top:8px;" onclick="deleteFromDetail()">Delete workout</button>
   </div>
 </div>
 
@@ -666,6 +668,16 @@ function saveDB(){ localStorage.setItem(DB_KEY, JSON.stringify(db)); }
 
 function uid(prefix){ return prefix + '_' + Math.random().toString(36).slice(2,9); }
 function todayStr(){ return new Date().toISOString().slice(0,10); }
+function timeStr(d){ const dt = d instanceof Date ? d : new Date(d); return dt.toTimeString().slice(0,5); }
+/* Minutes between two "HH:MM" strings on the same day. If end looks earlier
+   than start (crossed midnight), assumes it rolled into the next day. */
+function minutesBetweenTimes(startTime, endTime){
+  const [sh,sm] = startTime.split(':').map(Number);
+  const [eh,em] = endTime.split(':').map(Number);
+  let diff = (eh*60+em) - (sh*60+sm);
+  if(diff < 0) diff += 24*60;
+  return diff;
+}
 
 function seedData(){
   const today = new Date();
@@ -1114,6 +1126,7 @@ function startWorkout(routineId){
   const norm = normalizeRoutineExercises(r);
   liveSession = {
     routine: r.name,
+    routineId: r.id,
     startedAt: Date.now(),
     exercises: norm.map(ex=> ({
       name: ex.name,
@@ -1189,7 +1202,11 @@ function handleWorkoutScroll(){
   }
   workoutScrollLast = st;
 }
-function openWorkoutMenu(){ document.getElementById('workoutMenuModal').classList.add('active'); }
+function openWorkoutMenu(){
+  const btn = document.getElementById('updateRoutineBtn');
+  if(btn) btn.textContent = (liveSession && liveSession.routineId) ? '💾 Update routine' : '💾 Save as routine';
+  document.getElementById('workoutMenuModal').classList.add('active');
+}
 function closeWorkoutMenu(){ document.getElementById('workoutMenuModal').classList.remove('active'); }
 function openExerciseMenu(exIdx){
   const ex = liveSession.exercises[exIdx];
@@ -1381,6 +1398,39 @@ function scheduleAutoRest(){
     }
   }, 5000);
 }
+/* Syncs the exercises/sets/top-set/progression flags currently in the live
+   workout back into the routine template it was started from (adding,
+   removing, or reordering exercises during the session carries over). If the
+   session wasn't started from a routine (freestyle), offers to save it as a
+   brand-new routine instead. */
+function updateRoutineFromWorkout(){
+  if(!liveSession || !liveSession.exercises.length){ toast('Add at least one exercise first'); return; }
+  const cleanExercises = liveSession.exercises.map(ex=> ({
+    name: ex.name,
+    sets: Math.max(1, ex.sets.length || 1),
+    topSet: !!ex.isTopSetExercise,
+    progression: !!ex.isProgressionExercise
+  }));
+  const existing = liveSession.routineId ? db.routines.find(x=>x.id===liveSession.routineId) : null;
+  if(existing){
+    if(!confirm(`Update "${existing.name}" routine template with the current exercises?`)) return;
+    existing.exercises = cleanExercises;
+    cleanExercises.forEach(e=>{ if(!db.exerciseCatalog.includes(e.name)) db.exerciseCatalog.push(e.name); });
+    saveDB();
+    renderRoutines();
+    toast('Routine updated');
+  } else {
+    if(!confirm('Save this workout as a new routine template?')) return;
+    const newRoutine = { id: uid('r'), name: liveSession.routine || 'New routine', exercises: cleanExercises };
+    db.routines.push(newRoutine);
+    liveSession.routineId = newRoutine.id;
+    saveActiveSession();
+    cleanExercises.forEach(e=>{ if(!db.exerciseCatalog.includes(e.name)) db.exerciseCatalog.push(e.name); });
+    saveDB();
+    renderRoutines();
+    toast('Routine created');
+  }
+}
 function removeExercise(exIdx){
   const ex = liveSession.exercises[exIdx];
   if(ex.supersetGroup) unlinkSuperset(exIdx, true);
@@ -1523,17 +1573,21 @@ function finishWorkout(){
     clearTimeout(pendingAutoRestTimeout);
     liveSession = null; stopRest(); saveActiveSession(); closeOverlay('liveWorkoutOverlay'); return;
   }
+  if(!confirm('Finish and save this workout?')) return;
   // Snapshot the basics' PRs as they stood *before* this session is saved,
   // so we can tell afterwards whether today broke any of them.
   const prevPRs = {};
   Object.keys(BASICS).forEach(key=>{ prevPRs[key] = prForBasic(key); });
 
-  const durationMin = Math.max(1, Math.round((Date.now()-liveSession.startedAt)/60000));
+  const finishedAt = Date.now();
+  const durationMin = Math.max(1, Math.round((finishedAt-liveSession.startedAt)/60000));
   const newSession = {
     id: uid('s'),
     date: todayStr(),
     routine: liveSession.routine,
     durationMin,
+    startTime: timeStr(liveSession.startedAt),
+    endTime: timeStr(finishedAt),
     exercises: validExercises
   };
   // Basics summary (best set + estimated e1RM per basic) is computed now and
@@ -1946,8 +2000,9 @@ function renderSessions(){
     div.style.cursor = 'pointer';
     div.onclick = ()=> openSessionDetail(s.id);
     const dateFmt = new Date(s.date+'T00:00:00').toLocaleDateString('en-US', {day:'numeric', month:'short'});
+    const timeFmt = (s.startTime && s.endTime) ? ` · ${s.startTime}–${s.endTime}` : '';
     div.innerHTML = `
-      <div class="session-top"><span class="name">${s.routine}</span><span class="date">${dateFmt} · ${s.durationMin} min</span></div>
+      <div class="session-top"><span class="name">${s.routine}</span><span class="date">${dateFmt} · ${s.durationMin} min${timeFmt}</span></div>
       <div class="session-meta">
         <span><b>${s.exercises.length}</b> exercises</span>
         <span><b>${totalSets}</b> sets</span>
@@ -1992,9 +2047,10 @@ function openSessionDetail(sessionId){
       <div class="card-label">Basics · estimated 1RM</div>
       ${basicsHtml}
     </div>` : '';
+  const detailTimeFmt = (s.startTime && s.endTime) ? ` · ${s.startTime}–${s.endTime}` : '';
   body.innerHTML = `
     <div class="card">
-      <div class="card-label">${dateFmt} · ${s.durationMin} min</div>
+      <div class="card-label">${dateFmt} · ${s.durationMin} min${detailTimeFmt}</div>
       <div class="session-meta" style="font-size:12px;">
         <span><b>${s.durationMin}</b> min</span>
         <span><b>${s.exercises.length}</b> exercises</span>
@@ -2026,6 +2082,14 @@ function editFromDetail(){
   closeOverlay('sessionDetailOverlay');
   openEditSession(detailSessionId);
 }
+function deleteFromDetail(){
+  if(!confirm('Delete this workout entirely?')) return;
+  db.sessions = db.sessions.filter(x=>x.id!==detailSessionId);
+  saveDB();
+  closeOverlay('sessionDetailOverlay');
+  renderAll();
+  toast('Workout deleted');
+}
 
 /* Edit past session — mirrors the live workout view: one card per exercise,
    editable sets, and a star to mark a top set on any exercise (not just the
@@ -2048,8 +2112,22 @@ function renderEditSessionMeta(){
   document.getElementById('editMetaFields').innerHTML = `
     <div class="field"><label>Date</label><input type="date" id="editDate" value="${s.date}" onchange="editingSessionDraft.date=this.value"></div>
     <div class="field"><label>Routine</label><input type="text" id="editRoutine" value="${s.routine}" onchange="editingSessionDraft.routine=this.value"></div>
+    <div class="field"><label>Start time</label><input type="time" id="editStartTime" value="${s.startTime||''}" onchange="updateEditSessionTimes()"></div>
+    <div class="field"><label>End time</label><input type="time" id="editEndTime" value="${s.endTime||''}" onchange="updateEditSessionTimes()"></div>
     <div class="field"><label>Duration (min)</label><input type="number" id="editDuration" value="${s.durationMin}" onchange="editingSessionDraft.durationMin=parseInt(this.value)||editingSessionDraft.durationMin"></div>
   `;
+}
+/* Keeps the draft's startTime/endTime in sync with the inputs and, when both
+   are set, recomputes duration automatically so it doesn't go stale. */
+function updateEditSessionTimes(){
+  const startTime = document.getElementById('editStartTime').value;
+  const endTime = document.getElementById('editEndTime').value;
+  editingSessionDraft.startTime = startTime || null;
+  editingSessionDraft.endTime = endTime || null;
+  if(startTime && endTime){
+    editingSessionDraft.durationMin = Math.max(1, minutesBetweenTimes(startTime, endTime));
+    document.getElementById('editDuration').value = editingSessionDraft.durationMin;
+  }
 }
 function renderEditSessionBody(){
   const body = document.getElementById('editExercisesBody');
