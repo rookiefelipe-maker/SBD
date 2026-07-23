@@ -368,6 +368,42 @@
   .confirm-message{font-size:14px; line-height:1.45; color:var(--white); margin-bottom:20px;}
   .confirm-actions{display:flex; flex-direction:column; gap:8px;}
   .confirm-actions button{margin-top:0;}
+
+  /* App-styled time picker (replaces native input[type=time] on Android) */
+  .time-field-btn{
+    background:var(--charcoal); border:1px solid var(--line); border-radius:8px;
+    padding:10px 12px; font-size:14px; width:100%; text-align:left;
+  }
+  .time-field-btn.placeholder{color:var(--grey);}
+  #timePickerModal{z-index:130;}
+  #timePickerModal .modal-card{max-width:280px; padding:20px 18px 18px;}
+  .time-wheel-wrap{
+    position:relative; display:flex; justify-content:center; gap:4px;
+    height:180px; margin-bottom:18px;
+  }
+  .time-wheel-wrap::before, .time-wheel-wrap::after{
+    content:''; position:absolute; left:0; right:0; height:70px; pointer-events:none; z-index:2;
+  }
+  .time-wheel-wrap::before{ top:0; background:linear-gradient(var(--card), transparent); }
+  .time-wheel-wrap::after{ bottom:0; background:linear-gradient(transparent, var(--card)); }
+  .time-wheel-sel{
+    position:absolute; top:70px; left:0; right:0; height:40px;
+    border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+    background:rgba(224,38,27,0.08); pointer-events:none; z-index:1;
+  }
+  .time-wheel{
+    width:56px; height:180px; overflow-y:scroll; scroll-snap-type:y mandatory;
+    -ms-overflow-style:none; scrollbar-width:none; position:relative;
+  }
+  .time-wheel::-webkit-scrollbar{display:none;}
+  .time-wheel .pad{height:70px; scroll-snap-align:none;}
+  .time-wheel .twi{
+    height:40px; display:flex; align-items:center; justify-content:center;
+    font-size:19px; font-weight:700; color:var(--grey); scroll-snap-align:center;
+    font-variant-numeric:tabular-nums;
+  }
+  .time-wheel .twi.sel{color:var(--white);}
+  .time-wheel-colon{display:flex; align-items:center; justify-content:center; width:12px; font-size:19px; font-weight:700; color:var(--white);}
 </style>
 </head>
 <body>
@@ -668,6 +704,22 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="timePickerModal">
+  <div class="modal-card">
+    <div class="modal-title" id="timePickerModalTitle">Set time</div>
+    <div class="time-wheel-wrap">
+      <div class="time-wheel-sel"></div>
+      <div class="time-wheel" id="timeWheelHour"></div>
+      <div class="time-wheel-colon">:</div>
+      <div class="time-wheel" id="timeWheelMin"></div>
+    </div>
+    <div class="confirm-actions">
+      <button class="btn-primary" id="timePickerOk" style="margin-top:0;" onclick="_timePickerConfirm()">Set</button>
+      <button class="btn-secondary" style="width:100%;" onclick="_timePickerCancel()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ================= DATA LAYER ================= */
 const DB_KEY = 'sbd_tracker_v1';
@@ -890,6 +942,61 @@ document.getElementById('confirmModalOk').addEventListener('click', ()=> _confir
 document.getElementById('confirmModalCancel').addEventListener('click', ()=> _confirmModalAnswer(false));
 document.getElementById('confirmModal').addEventListener('click', (e)=>{
   if(e.target.id==='confirmModal') _confirmModalAnswer(false);
+});
+
+/* App-styled time picker (replaces native input[type=time], which on Android
+   pops the system clock UI that clashes with the app's look). Two scroll
+   wheels (hour/minute) with snap-to-center; the item nearest the highlighted
+   band in the middle is the selected value. */
+let _timePickerTargetId = null;
+function _twiPad(n){ return String(n).padStart(2,'0'); }
+function _buildTimeWheel(el, count, current){
+  el.innerHTML = '<div class="pad"></div>' +
+    Array.from({length:count}, (_,i)=> `<div class="twi" data-v="${i}">${_twiPad(i)}</div>`).join('') +
+    '<div class="pad"></div>';
+  el.scrollTop = current * 40;
+}
+function _highlightTimeWheel(el){
+  const idx = Math.round(el.scrollTop / 40);
+  el.querySelectorAll('.twi').forEach(item=>{
+    item.classList.toggle('sel', parseInt(item.dataset.v,10) === idx);
+  });
+  return idx;
+}
+function openTimePicker(targetId, label){
+  _timePickerTargetId = targetId;
+  const btn = document.getElementById(targetId);
+  const current = btn.dataset.value || '';
+  const [h, m] = current ? current.split(':').map(Number) : [new Date().getHours(), new Date().getMinutes()];
+  document.getElementById('timePickerModalTitle').textContent = label || 'Set time';
+  const hourEl = document.getElementById('timeWheelHour');
+  const minEl = document.getElementById('timeWheelMin');
+  _buildTimeWheel(hourEl, 24, h);
+  _buildTimeWheel(minEl, 60, m);
+  _highlightTimeWheel(hourEl);
+  _highlightTimeWheel(minEl);
+  hourEl.onscroll = ()=>{ clearTimeout(hourEl._t); hourEl._t = setTimeout(()=>_highlightTimeWheel(hourEl), 60); };
+  minEl.onscroll = ()=>{ clearTimeout(minEl._t); minEl._t = setTimeout(()=>_highlightTimeWheel(minEl), 60); };
+  document.getElementById('timePickerModal').classList.add('active');
+}
+function _timePickerConfirm(){
+  const hourEl = document.getElementById('timeWheelHour');
+  const minEl = document.getElementById('timeWheelMin');
+  const h = _highlightTimeWheel(hourEl);
+  const m = _highlightTimeWheel(minEl);
+  const value = `${_twiPad(h)}:${_twiPad(m)}`;
+  const btn = document.getElementById(_timePickerTargetId);
+  btn.dataset.value = value;
+  btn.textContent = value;
+  btn.classList.remove('placeholder');
+  document.getElementById('timePickerModal').classList.remove('active');
+  updateEditSessionTimes();
+}
+function _timePickerCancel(){
+  document.getElementById('timePickerModal').classList.remove('active');
+}
+document.getElementById('timePickerModal').addEventListener('click', (e)=>{
+  if(e.target.id==='timePickerModal') _timePickerCancel();
 });
 
 /* ================= DASHBOARD ================= */
@@ -2159,16 +2266,20 @@ function renderEditSessionMeta(){
   document.getElementById('editMetaFields').innerHTML = `
     <div class="field"><label>Date</label><input type="date" id="editDate" value="${s.date}" onchange="editingSessionDraft.date=this.value"></div>
     <div class="field"><label>Routine</label><input type="text" id="editRoutine" value="${s.routine}" onchange="editingSessionDraft.routine=this.value"></div>
-    <div class="field"><label>Start time</label><input type="time" id="editStartTime" value="${s.startTime||''}" onchange="updateEditSessionTimes()"></div>
-    <div class="field"><label>End time</label><input type="time" id="editEndTime" value="${s.endTime||''}" onchange="updateEditSessionTimes()"></div>
+    <div class="field"><label>Start time</label>
+      <button type="button" class="time-field-btn ${s.startTime?'':'placeholder'}" id="editStartTime" data-value="${s.startTime||''}" onclick="openTimePicker('editStartTime','Start time')">${s.startTime||'Set time'}</button>
+    </div>
+    <div class="field"><label>End time</label>
+      <button type="button" class="time-field-btn ${s.endTime?'':'placeholder'}" id="editEndTime" data-value="${s.endTime||''}" onclick="openTimePicker('editEndTime','End time')">${s.endTime||'Set time'}</button>
+    </div>
     <div class="field"><label>Duration (min)</label><input type="number" id="editDuration" value="${s.durationMin}" onchange="editingSessionDraft.durationMin=parseInt(this.value)||editingSessionDraft.durationMin"></div>
   `;
 }
 /* Keeps the draft's startTime/endTime in sync with the inputs and, when both
    are set, recomputes duration automatically so it doesn't go stale. */
 function updateEditSessionTimes(){
-  const startTime = document.getElementById('editStartTime').value;
-  const endTime = document.getElementById('editEndTime').value;
+  const startTime = document.getElementById('editStartTime').dataset.value || '';
+  const endTime = document.getElementById('editEndTime').dataset.value || '';
   editingSessionDraft.startTime = startTime || null;
   editingSessionDraft.endTime = endTime || null;
   if(startTime && endTime){
