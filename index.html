@@ -272,6 +272,20 @@
     padding:9px 16px; border-radius:8px; font-size:12px; font-weight:700; white-space:nowrap;
   }
 
+  /* Full-screen dim + big countdown shown during the last 5 seconds of rest */
+  .rest-dim-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:90;
+    display:none; align-items:center; justify-content:center; flex-direction:column; gap:10px;
+    backdrop-filter:blur(2px);
+  }
+  .rest-dim-overlay.active{display:flex;}
+  .rest-dim-count{
+    font-size:130px; font-weight:900; color:var(--red); font-variant-numeric:tabular-nums;
+    line-height:1; animation:restDimPulse .5s ease;
+  }
+  @keyframes restDimPulse{ from{transform:scale(1.4); opacity:0;} to{transform:scale(1); opacity:1;} }
+  .rest-dim-hint{font-size:12px; color:var(--grey); text-transform:uppercase; letter-spacing:1px;}
+
   /* Live workout: floating actions menu button. Sits in the header's top-right
      corner at rest; once the exercise list scrolls, it detaches into a round
      floating action button so it stays reachable. */
@@ -690,6 +704,12 @@
   <button class="rest-fab" id="restFab" onclick="toggleRestControls()"><span id="restFabVal">03:00</span></button>
 </div>
 
+<!-- Full-screen dim shown during the final 5 seconds of the rest timer -->
+<div class="rest-dim-overlay" id="restDimOverlay" onclick="stopRest()">
+  <div class="rest-dim-count" id="restDimCount">5</div>
+  <div class="rest-dim-hint">Tap to skip</div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <!-- App-styled confirm dialog (replaces native confirm()) -->
@@ -730,6 +750,7 @@ function loadDB(){
     try {
       const parsed = JSON.parse(raw);
       if(!parsed.settings) parsed.settings = { restSeconds: 180 };
+      if(!parsed.basicAssignments) parsed.basicAssignments = {};
       return parsed;
     } catch(e){ /* fallthrough to seed */ }
   }
@@ -758,6 +779,7 @@ function seedData(){
   const db = {
     settings: { restSeconds: 180 },
     goals: { squat: 140, bench: 100, deadlift: 180 },
+    basicAssignments: {},
     exerciseCatalog: ['Squat','Bench Press','Deadlift','Overhead Press','Pull-ups','Barbell Row','Dips','Leg Press','Leg Curl','Bicep Curl','Tricep Extension'],
     routines: [
       { id:'r1', name:'Push', exercises:['Bench Press','Overhead Press','Dips'] },
@@ -834,9 +856,26 @@ const BASIC_ALIASES = {
   deadlift: ['deadlift', 'peso muerto', 'pesomuerto']
 };
 const BASICS = { squat:'Squat', bench:'Bench Press', deadlift:'Deadlift' };
+/* Which basic (if any) an exercise name counts toward. db.basicAssignments
+   is an explicit, user-editable map (normalized name -> 'squat'|'bench'|
+   'deadlift') set via the "Basic lift" toggle when creating/editing a
+   template exercise. It always wins, so renaming an exercise (e.g. to
+   "Sentadilla") or using a completely custom name no longer breaks the
+   dashboard card — the user just flags it once and it's tracked forever.
+   BASIC_ALIASES is kept only as a fallback for names that were never
+   explicitly flagged, for backwards compatibility with existing data. */
+function basicKeyForExercise(name){
+  const norm = normalizeName(name);
+  if(Object.prototype.hasOwnProperty.call(db.basicAssignments, norm)){
+    return db.basicAssignments[norm] || null;
+  }
+  for(const key in BASIC_ALIASES){
+    if(BASIC_ALIASES[key].includes(norm)) return key;
+  }
+  return null;
+}
 function prForBasic(key){
-  const aliases = BASIC_ALIASES[key];
-  const sets = allSets().filter(s => aliases.includes(normalizeName(s.exercise)));
+  const sets = allSets().filter(s => basicKeyForExercise(s.exercise) === key);
   if(!sets.length) return null;
   return sets.reduce((a,b)=> b.weight > a.weight ? b : a);
 }
@@ -1127,7 +1166,10 @@ function openRoutineEditor(routineId){
   if(routineId){
     const r = db.routines.find(x=>x.id===routineId);
     document.getElementById('routineNameInput').value = r.name;
-    routineDraftExercises = normalizeRoutineExercises(r);
+    // _origName remembers the name this exercise had when the editor opened,
+    // so saveRoutine() can tell "renamed an existing exercise" apart from
+    // "typed a brand new exercise" and cascade the rename through history.
+    routineDraftExercises = normalizeRoutineExercises(r).map(e=> ({ ...e, _origName: e.name, basicKey: basicKeyForExercise(e.name) }));
   } else {
     document.getElementById('routineNameInput').value = '';
     routineDraftExercises = [];
@@ -1143,7 +1185,7 @@ function renderExerciseCatalogDatalist(){
   dl.innerHTML = db.exerciseCatalog.map(n=> `<option value="${n.replace(/"/g,'&quot;')}">`).join('');
 }
 function addDraftExercise(){
-  routineDraftExercises.push({ name:'', sets:3, topSet:false, progression:false });
+  routineDraftExercises.push({ name:'', sets:3, topSet:false, progression:false, basicKey:null, _origName:'' });
   renderRoutineDraftExercises();
   setTimeout(()=>{
     const inputs = document.querySelectorAll('#routineExercisesWrap .draft-ex-name');
@@ -1171,6 +1213,11 @@ function toggleDraftTopSet(idx){
   if(!ex.topSet) ex.progression = false; // progression needs a top set to compare
   renderRoutineDraftExercises();
 }
+function toggleDraftBasic(idx, key){
+  const ex = routineDraftExercises[idx];
+  ex.basicKey = ex.basicKey === key ? null : key;
+  renderRoutineDraftExercises();
+}
 function toggleDraftProgression(idx){
   const ex = routineDraftExercises[idx];
   if(!ex.topSet){ toast('Enable Top Set first'); return; }
@@ -1193,6 +1240,7 @@ function renderRoutineDraftExercises(){
           <input type="text" class="draft-ex-name" placeholder="Exercise name" value="${ex.name.replace(/"/g,'&quot;')}"
             list="exerciseCatalogList" autocomplete="off"
             oninput="updateDraftExerciseName(${idx}, this.value)">
+          ${ex._origName ? '<small class="hint" style="margin-top:4px; margin-bottom:0;">Editing renames this exercise (and its history) — it doesn\'t swap in a different one</small>' : ''}
         </div>
         <button class="rm-exercise" style="margin-left:10px; white-space:nowrap;" onclick="removeDraftExerciseAt(${idx})">Remove</button>
       </div>
@@ -1212,6 +1260,17 @@ function renderRoutineDraftExercises(){
         <span class="toggle-label">Progression</span>
         <div class="switch ${ex.progression?'on':''} ${!ex.topSet?'disabled':''}" onclick="toggleDraftProgression(${idx})"><div class="knob"></div></div>
       </div>
+      <div class="toggle-row" style="align-items:center;">
+        <span class="toggle-label">Basic lift</span>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          ${['squat','bench','deadlift'].map(key=> `
+            <button type="button" class="basic-pill ${ex.basicKey===key?'active':''}"
+              style="padding:4px 10px; border-radius:999px; font-size:11px; font-weight:700; border:1px solid var(--grey,#999); background:${ex.basicKey===key?'var(--accent,#2d6cdf)':'transparent'}; color:${ex.basicKey===key?'#fff':'inherit'}; cursor:pointer;"
+              onclick="toggleDraftBasic(${idx}, '${key}')">${BASICS[key]}</button>
+          `).join('')}
+        </div>
+      </div>
+      ${ex.basicKey ? '<small class="hint" style="margin-top:4px;">Counts toward the SBD dashboard card as ' + BASICS[ex.basicKey] + ', whatever this exercise is named</small>' : ''}
     `;
     wrap.appendChild(block);
   });
@@ -1223,7 +1282,33 @@ function saveRoutine(){
     .map(e=> ({ name: e.name.trim(), sets: e.sets||1, topSet: !!e.topSet, progression: !!e.topSet && !!e.progression }))
     .filter(e=> e.name);
   if(!cleanExercises.length){ toast('Add at least one exercise'); return; }
+
+  // An exercise whose name changed since the editor opened is a rename, not
+  // a brand-new exercise: cascade the new name through every routine and
+  // every past workout so the history stays attached to the same exercise.
+  let renameCount = 0;
+  routineDraftExercises.forEach(e=>{
+    const newName = (e.name||'').trim();
+    const oldName = (e._origName||'').trim();
+    if(oldName && newName && oldName !== newName){
+      renameExerciseGlobally(oldName, newName);
+      renameCount++;
+    }
+  });
+
   cleanExercises.forEach(e=>{ if(!db.exerciseCatalog.includes(e.name)) db.exerciseCatalog.push(e.name); });
+
+  // Persist each exercise's "Basic lift" toggle globally (by normalized
+  // name), so the dashboard SBD card keeps recognizing it no matter which
+  // routine it's used in or what it's renamed to.
+  routineDraftExercises.forEach(e=>{
+    const nm = (e.name||'').trim();
+    if(!nm) return;
+    const norm = normalizeName(nm);
+    if(e.basicKey) db.basicAssignments[norm] = e.basicKey;
+    else delete db.basicAssignments[norm];
+  });
+
   if(editingRoutineId){
     const r = db.routines.find(x=>x.id===editingRoutineId);
     r.name = name; r.exercises = cleanExercises; delete r.topSetExercises;
@@ -1233,7 +1318,44 @@ function saveRoutine(){
   saveDB();
   closeOverlay('routineEditorOverlay');
   renderRoutines();
-  toast('Routine saved');
+  renderSessions();
+  renderStatGrid();
+  renderSBD();
+  toast(renameCount ? 'Routine saved · renamed in all past workouts' : 'Routine saved');
+}
+
+/* Renames an exercise everywhere it's referenced — every routine that uses
+   it, every past workout in the history, the in-progress workout (if any),
+   and the exercise catalog. Exercises are identified by name throughout the
+   app, so this keeps all of those records pointing at the same exercise
+   under its new name instead of splitting its history in two. */
+function renameExerciseGlobally(oldName, newName){
+  if(!oldName || !newName || oldName === newName) return;
+  db.routines.forEach(r=>{
+    r.exercises = (r.exercises||[]).map(e=>{
+      if(typeof e === 'string') return e===oldName ? newName : e;
+      if(e && e.name === oldName) return { ...e, name:newName };
+      return e;
+    });
+    if(Array.isArray(r.topSetExercises)){
+      r.topSetExercises = r.topSetExercises.map(n=> n===oldName ? newName : n);
+    }
+  });
+  db.sessions.forEach(s=>{
+    (s.exercises||[]).forEach(e=>{ if(e.name === oldName) e.name = newName; });
+  });
+  if(liveSession){
+    liveSession.exercises.forEach(e=>{ if(e.name === oldName) e.name = newName; });
+    saveActiveSession();
+  }
+  db.exerciseCatalog = db.exerciseCatalog.filter(n=> n !== oldName);
+  if(!db.exerciseCatalog.includes(newName)) db.exerciseCatalog.push(newName);
+
+  const oldNorm = normalizeName(oldName), newNorm = normalizeName(newName);
+  if(Object.prototype.hasOwnProperty.call(db.basicAssignments, oldNorm)){
+    db.basicAssignments[newNorm] = db.basicAssignments[oldNorm];
+    delete db.basicAssignments[oldNorm];
+  }
 }
 async function deleteCurrentRoutine(){
   if(!editingRoutineId) return;
@@ -2087,18 +2209,32 @@ document.addEventListener('click', (e)=>{
 }, true);
 
 let restActive = false;
+/* Dims the screen and shows a big countdown once 5 seconds or less remain. */
+function updateRestDimOverlay(){
+  const overlay = document.getElementById('restDimOverlay');
+  const countEl = document.getElementById('restDimCount');
+  if(!overlay || !countEl) return;
+  if(restActive && restRemaining>0 && restRemaining<=5){
+    countEl.textContent = restRemaining;
+    overlay.classList.add('active');
+  } else {
+    overlay.classList.remove('active');
+  }
+}
 function startRest(seconds){
   clearTimeout(pendingAutoRestTimeout);
   restActive = true;
   restRemaining = seconds;
   document.getElementById('restFabWrap').classList.add('active');
   updateRestDisplay();
+  updateRestDimOverlay();
   clearInterval(restInterval);
   restInterval = setInterval(()=>{
     restRemaining--;
     if(restRemaining<=0){ stopRest(); vibrateRestEnd(); playRestEndSound(); toast('Back to it!'); return; }
     if(restRemaining<=5){ playCountdownBeep(); }
     updateRestDisplay();
+    updateRestDimOverlay();
   },1000);
 }
 function restartRest(){ startRest(db.settings.restSeconds); }
@@ -2108,13 +2244,18 @@ function updateRestDisplay(){
   const s = (restRemaining%60).toString().padStart(2,'0');
   document.getElementById('restFabVal').textContent = m+':'+s;
 }
-function adjustRest(delta){ restRemaining = Math.max(0, restRemaining+delta); updateRestDisplay(); }
+function adjustRest(delta){
+  restRemaining = Math.max(0, restRemaining+delta);
+  updateRestDisplay();
+  updateRestDimOverlay();
+}
 function setRestDuration(seconds){ startRest(seconds); }
 function stopRest(){
   restActive = false;
   clearInterval(restInterval);
   document.getElementById('restFabWrap').classList.remove('active');
   document.getElementById('restControls').classList.remove('open');
+  updateRestDimOverlay();
 }
 function startManualRest(exIdx){
   startRest(db.settings.restSeconds);
@@ -2423,7 +2564,7 @@ async function resetAllData(){
   if(!await appConfirm('This will delete ALL your data (routines, workouts, goals, catalog). Are you sure?', {title:'Reset data', confirmText:'Continue'})) return;
   if(!await appConfirm('Last confirmation: this cannot be undone. Delete everything?', {title:'Are you sure?', confirmText:'Delete everything'})) return;
   localStorage.removeItem(DB_KEY);
-  db = { settings:{restSeconds:180}, goals:{squat:0,bench:0,deadlift:0}, exerciseCatalog:[], routines:[], sessions:[] };
+  db = { settings:{restSeconds:180}, goals:{squat:0,bench:0,deadlift:0}, basicAssignments:{}, exerciseCatalog:[], routines:[], sessions:[] };
   saveDB();
   closeOverlay('settingsOverlay');
   renderAll();
