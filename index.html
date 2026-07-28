@@ -1240,7 +1240,7 @@ function renderRoutineDraftExercises(){
           <input type="text" class="draft-ex-name" placeholder="Exercise name" value="${ex.name.replace(/"/g,'&quot;')}"
             list="exerciseCatalogList" autocomplete="off"
             oninput="updateDraftExerciseName(${idx}, this.value)">
-          ${ex._origName ? '<small class="hint" style="margin-top:4px; margin-bottom:0;">Editing renames this exercise (and its history) — it doesn\'t swap in a different one</small>' : ''}
+          ${ex._origName ? '<small class="hint" style="margin-top:4px; margin-bottom:0;">Editing renames this exercise and its history in THIS template only — it doesn\'t swap in a different one, and won\'t affect other templates</small>' : ''}
         </div>
         <button class="rm-exercise" style="margin-left:10px; white-space:nowrap;" onclick="removeDraftExerciseAt(${idx})">Remove</button>
       </div>
@@ -1284,8 +1284,10 @@ function saveRoutine(){
   if(!cleanExercises.length){ toast('Add at least one exercise'); return; }
 
   // An exercise whose name changed since the editor opened is a rename, not
-  // a brand-new exercise: cascade the new name through every routine and
-  // every past workout so the history stays attached to the same exercise.
+  // a brand-new exercise: cascade the new name through this routine's past
+  // workouts so the history stays attached to the same exercise. Other
+  // routines/templates are never touched — each template's exercises are
+  // independent, even if they happen to share a name.
   let renameCount = 0;
   routineDraftExercises.forEach(e=>{
     const newName = (e.name||'').trim();
@@ -1321,26 +1323,19 @@ function saveRoutine(){
   renderSessions();
   renderStatGrid();
   renderSBD();
-  toast(renameCount ? 'Routine saved · renamed in all past workouts' : 'Routine saved');
+  toast(renameCount ? 'Routine saved · renamed in this routine\'s past workouts' : 'Routine saved');
 }
 
-/* Renames an exercise everywhere it's referenced — every routine that uses
-   it, every past workout in the history, the in-progress workout (if any),
-   and the exercise catalog. Exercises are identified by name throughout the
-   app, so this keeps all of those records pointing at the same exercise
-   under its new name instead of splitting its history in two. */
+/* Renames an exercise's history — every past workout, the in-progress
+   workout (if any), and the exercise catalog — WITHOUT touching other
+   routines/templates. Each template's exercises are independent of one
+   another: renaming "Bench" in one template must never rename a "Bench" (or
+   "Competition Bench") that happens to live in a different template. The
+   template being edited is updated separately by saveRoutine(); this
+   function only carries the new name into the shared history so past logs
+   stay attached to the same exercise instead of splitting in two. */
 function renameExerciseGlobally(oldName, newName){
   if(!oldName || !newName || oldName === newName) return;
-  db.routines.forEach(r=>{
-    r.exercises = (r.exercises||[]).map(e=>{
-      if(typeof e === 'string') return e===oldName ? newName : e;
-      if(e && e.name === oldName) return { ...e, name:newName };
-      return e;
-    });
-    if(Array.isArray(r.topSetExercises)){
-      r.topSetExercises = r.topSetExercises.map(n=> n===oldName ? newName : n);
-    }
-  });
   db.sessions.forEach(s=>{
     (s.exercises||[]).forEach(e=>{ if(e.name === oldName) e.name = newName; });
   });
@@ -1348,7 +1343,10 @@ function renameExerciseGlobally(oldName, newName){
     liveSession.exercises.forEach(e=>{ if(e.name === oldName) e.name = newName; });
     saveActiveSession();
   }
-  db.exerciseCatalog = db.exerciseCatalog.filter(n=> n !== oldName);
+  // Other templates may still use oldName independently — only drop it from
+  // the catalog if nothing references it anymore.
+  const oldNameStillUsed = db.routines.some(r=> r.id !== editingRoutineId && (r.exercises||[]).some(e=> (typeof e === 'string' ? e : e && e.name) === oldName));
+  if(!oldNameStillUsed) db.exerciseCatalog = db.exerciseCatalog.filter(n=> n !== oldName);
   if(!db.exerciseCatalog.includes(newName)) db.exerciseCatalog.push(newName);
 
   const oldNorm = normalizeName(oldName), newNorm = normalizeName(newName);
