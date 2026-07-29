@@ -222,6 +222,8 @@
   }
   .ex-block-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
   .ex-block-top h3{font-size:15px; font-weight:700;}
+  .ex-name-input{background:transparent; border:none; border-bottom:1px solid transparent; padding:0 0 2px; font-size:15px; font-weight:700; width:auto; max-width:100%; color:var(--white);}
+  .ex-name-input:focus{outline:none; border-bottom:1px solid var(--red);}
   .ex-block-top .last{font-size:11px; color:var(--grey); margin-top:2px;}
   .ex-block-top .pr{font-size:11px; color:var(--red); margin-top:2px; font-weight:600;}
   .ex-actions{display:flex; flex-direction:column; align-items:flex-end; gap:6px;}
@@ -2418,6 +2420,9 @@ function openEditSession(sessionId){
   // Deep clone so in-progress edits (added/removed exercises & sets) don't
   // mutate the real session unless the user explicitly saves.
   editingSessionDraft = JSON.parse(JSON.stringify(s));
+  // Track each exercise's original name so saveEditedSession() can tell a
+  // rename apart from an untouched exercise and offer to cascade it.
+  editingSessionDraft.exercises.forEach(ex=>{ ex._origName = ex.name; });
   renderEditSessionMeta();
   renderEditSessionBody();
   document.getElementById('editSessionOverlay').classList.add('active');
@@ -2465,7 +2470,7 @@ function renderEditSessionBody(){
       <div class="ex-block-top">
         <div>
           ${supersetTag}
-          <h3>${ex.name}</h3>
+          <input type="text" class="ex-name-input" value="${ex.name}" onchange="updateEditExerciseName(${exIdx}, this.value)">
         </div>
         <div class="ex-actions">
           <button class="swap-btn" onclick="openExercisePicker(${exIdx}, 'edit')">Substitute</button>
@@ -2522,13 +2527,55 @@ function updateEditSet(exIdx, setIdx, field, value){
   const v = value === '' ? null : parseFloat(value);
   editingSessionDraft.exercises[exIdx].sets[setIdx][field] = v;
 }
+function updateEditExerciseName(exIdx, value){
+  editingSessionDraft.exercises[exIdx].name = value.trim();
+}
 function removeEditExercise(exIdx){
   editingSessionDraft.exercises.splice(exIdx,1);
   renderEditSessionBody();
 }
-function saveEditedSession(){
+/* Renames an exercise across its linked routine template and the rest of
+   the workout history — the same cascade renaming an exercise inside the
+   routine editor already does (see renameExerciseGlobally above). Used when
+   a rename is made directly from a past workout's edit screen instead. */
+function cascadeExerciseRename(oldName, newName, session){
+  const routine = session.routineId
+    ? db.routines.find(r=>r.id===session.routineId)
+    : db.routines.find(r=>r.name===session.routine);
+  if(routine){
+    (routine.exercises||[]).forEach(e=>{
+      if(e && e.name === oldName) e.name = newName;
+    });
+  }
+  // renameExerciseGlobally() normally excludes the routine currently open
+  // in the routine editor from its "still used elsewhere" catalog check;
+  // that doesn't apply here, so make sure a stale editingRoutineId can't
+  // skew the check.
+  const prevEditingRoutineId = editingRoutineId;
+  editingRoutineId = null;
+  renameExerciseGlobally(oldName, newName);
+  editingRoutineId = prevEditingRoutineId;
+}
+async function saveEditedSession(){
   const s = db.sessions.find(x=>x.id===editingSessionId);
   const idx = db.sessions.indexOf(s);
+
+  // If the exercise's name was changed in this editor, ask whether that
+  // should cascade into the linked routine template and the rest of the
+  // history, or stay a one-off rename on just this workout.
+  for(const ex of editingSessionDraft.exercises){
+    const oldName = (ex._origName||'').trim();
+    const newName = (ex.name||'').trim();
+    delete ex._origName;
+    if(!oldName || !newName || oldName === newName) continue;
+    const routineLabel = editingSessionDraft.routine || 'this workout';
+    const wantsCascade = await appConfirm(
+      `Also rename "${oldName}" to "${newName}" everywhere it appears in the "${routineLabel}" template and the rest of your history? Choose "Only this workout" to change it here only.`,
+      { title:'Rename exercise', confirmText:'Update everywhere', cancelText:'Only this workout', danger:false }
+    );
+    if(wantsCascade) cascadeExerciseRename(oldName, newName, editingSessionDraft);
+  }
+
   // Drop any incomplete sets (missing weight or reps) before persisting,
   // same rule the live workout follows implicitly.
   editingSessionDraft.exercises.forEach(ex=>{
