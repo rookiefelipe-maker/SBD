@@ -1091,12 +1091,11 @@ function renderWeek(){
   const wrap = document.getElementById('weekSBDList');
   wrap.innerHTML = '';
   Object.entries(BASICS).forEach(([key, label])=>{
-    const aliases = BASIC_ALIASES[key];
     let best = null;
     db.sessions.forEach(s=>{
       if(s.date < mondayStr) return;
       s.exercises.forEach(e=>{
-        if(!aliases.includes(normalizeName(e.name))) return;
+        if(basicKeyForExercise(e.name) !== key) return;
         e.sets.forEach(set=>{
           if(!best || set.w > best.w){ best = { w:set.w, r:set.r, date:s.date }; }
         });
