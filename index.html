@@ -1312,7 +1312,29 @@ function saveRoutine(){
 
   if(editingRoutineId){
     const r = db.routines.find(x=>x.id===editingRoutineId);
+    const oldRoutineName = r.name;
     r.name = name; r.exercises = cleanExercises; delete r.topSetExercises;
+    // Cascade a routine rename into its past workouts too, same idea as
+    // renameExerciseGlobally() above: history should follow the routine it
+    // belongs to, not go stale with the old label. Match by routineId when
+    // present; fall back to matching the old name for sessions saved before
+    // routineId existed on the session record.
+    if(oldRoutineName !== name){
+      let historyRenamed = 0;
+      db.sessions.forEach(s=>{
+        const belongsToThisRoutine = s.routineId ? s.routineId === editingRoutineId : s.routine === oldRoutineName;
+        if(belongsToThisRoutine){
+          s.routine = name;
+          if(!s.routineId) s.routineId = editingRoutineId;
+          historyRenamed++;
+        }
+      });
+      if(historyRenamed) renameCount++;
+    }
+    if(liveSession && liveSession.routineId === editingRoutineId){
+      liveSession.routine = name;
+      saveActiveSession();
+    }
   } else {
     db.routines.push({ id: uid('r'), name, exercises: cleanExercises });
   }
@@ -1858,6 +1880,7 @@ async function finishWorkout(){
     id: uid('s'),
     date: todayStr(),
     routine: liveSession.routine,
+    routineId: liveSession.routineId || null,
     durationMin,
     startTime: timeStr(liveSession.startedAt),
     endTime: timeStr(finishedAt),
