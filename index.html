@@ -1285,16 +1285,17 @@ function saveRoutine(){
   if(!cleanExercises.length){ toast('Add at least one exercise'); return; }
 
   // An exercise whose name changed since the editor opened is a rename, not
-  // a brand-new exercise: cascade the new name through this routine's past
-  // workouts so the history stays attached to the same exercise. Other
-  // routines/templates are never touched — each template's exercises are
-  // independent, even if they happen to share a name.
+  // a brand-new exercise: cascade the new name through THIS routine's past
+  // workouts only, so the history stays attached to the same exercise.
+  // Other routines/templates — and their own history — are never touched,
+  // even if they happen to log an exercise with the exact same name.
+  const routineBeingEdited = editingRoutineId ? db.routines.find(x=>x.id===editingRoutineId) : null;
   let renameCount = 0;
   routineDraftExercises.forEach(e=>{
     const newName = (e.name||'').trim();
     const oldName = (e._origName||'').trim();
     if(oldName && newName && oldName !== newName){
-      renameExerciseGlobally(oldName, newName);
+      renameExerciseGlobally(oldName, newName, editingRoutineId, routineBeingEdited ? routineBeingEdited.name : null);
       renameCount++;
     }
   });
@@ -1353,29 +1354,44 @@ function saveRoutine(){
    workout (if any), and the exercise catalog — WITHOUT touching other
    routines/templates. Each template's exercises are independent of one
    another: renaming "Bench" in one template must never rename a "Bench" (or
-   "Competition Bench") that happens to live in a different template. The
-   template being edited is updated separately by saveRoutine(); this
-   function only carries the new name into the shared history so past logs
-   stay attached to the same exercise instead of splitting in two. */
-function renameExerciseGlobally(oldName, newName){
+   "Competition Bench") that happens to live in a different template — and
+   that includes the WORKOUT HISTORY, not just other templates: a session
+   started from a different routine that happens to log an exercise with the
+   same name must be left untouched. scopeRoutineId/scopeRoutineName say
+   which routine's sessions are in scope; sessions are matched by routineId
+   when they have one, falling back to matching the routine's name for
+   sessions saved before routineId existed on the session record. */
+function renameExerciseGlobally(oldName, newName, scopeRoutineId, scopeRoutineName){
   if(!oldName || !newName || oldName === newName) return;
+  const inScope = s => s.routineId ? s.routineId === scopeRoutineId : s.routine === scopeRoutineName;
   db.sessions.forEach(s=>{
+    if(!inScope(s)) return;
     (s.exercises||[]).forEach(e=>{ if(e.name === oldName) e.name = newName; });
   });
-  if(liveSession){
+  if(liveSession && inScope(liveSession)){
     liveSession.exercises.forEach(e=>{ if(e.name === oldName) e.name = newName; });
     saveActiveSession();
   }
-  // Other templates may still use oldName independently — only drop it from
-  // the catalog if nothing references it anymore.
-  const oldNameStillUsed = db.routines.some(r=> r.id !== editingRoutineId && (r.exercises||[]).some(e=> (typeof e === 'string' ? e : e && e.name) === oldName));
+  // oldName may still be used by other routines, or by sessions belonging
+  // to a different routine — only drop it from the catalog/basic-lift map
+  // if nothing references it anymore anywhere.
+  const oldNameStillUsed =
+    db.routines.some(r=> r.id !== scopeRoutineId && (r.exercises||[]).some(e=> (typeof e === 'string' ? e : e && e.name) === oldName)) ||
+    db.sessions.some(s=> !inScope(s) && (s.exercises||[]).some(e=> e.name === oldName));
   if(!oldNameStillUsed) db.exerciseCatalog = db.exerciseCatalog.filter(n=> n !== oldName);
   if(!db.exerciseCatalog.includes(newName)) db.exerciseCatalog.push(newName);
 
   const oldNorm = normalizeName(oldName), newNorm = normalizeName(newName);
   if(Object.prototype.hasOwnProperty.call(db.basicAssignments, oldNorm)){
-    db.basicAssignments[newNorm] = db.basicAssignments[oldNorm];
-    delete db.basicAssignments[oldNorm];
+    if(oldNameStillUsed){
+      // Still used elsewhere under the old name — copy the flag forward so
+      // the renamed exercise keeps counting too, without erasing it for the
+      // exercise(s) still called oldName.
+      if(!Object.prototype.hasOwnProperty.call(db.basicAssignments, newNorm)) db.basicAssignments[newNorm] = db.basicAssignments[oldNorm];
+    } else {
+      db.basicAssignments[newNorm] = db.basicAssignments[oldNorm];
+      delete db.basicAssignments[oldNorm];
+    }
   }
 }
 async function deleteCurrentRoutine(){
@@ -2547,14 +2563,9 @@ function cascadeExerciseRename(oldName, newName, session){
       if(e && e.name === oldName) e.name = newName;
     });
   }
-  // renameExerciseGlobally() normally excludes the routine currently open
-  // in the routine editor from its "still used elsewhere" catalog check;
-  // that doesn't apply here, so make sure a stale editingRoutineId can't
-  // skew the check.
-  const prevEditingRoutineId = editingRoutineId;
-  editingRoutineId = null;
-  renameExerciseGlobally(oldName, newName);
-  editingRoutineId = prevEditingRoutineId;
+  const scopeRoutineId = routine ? routine.id : (session.routineId || null);
+  const scopeRoutineName = routine ? routine.name : session.routine;
+  renameExerciseGlobally(oldName, newName, scopeRoutineId, scopeRoutineName);
 }
 async function saveEditedSession(){
   const s = db.sessions.find(x=>x.id===editingSessionId);
