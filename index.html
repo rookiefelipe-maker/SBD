@@ -761,7 +761,20 @@ function loadDB(){
 function saveDB(){ localStorage.setItem(DB_KEY, JSON.stringify(db)); }
 
 function uid(prefix){ return prefix + '_' + Math.random().toString(36).slice(2,9); }
-function todayStr(){ return new Date().toISOString().slice(0,10); }
+/* Formats a Date as YYYY-MM-DD using the device's LOCAL calendar date, not
+   UTC. Date.toISOString() always converts to UTC first, which silently
+   shifts the date by a day for anyone west of UTC (or east, depending on
+   time of day) — e.g. 8pm Monday in Colombia (UTC-5) becomes 1am Tuesday
+   UTC. Every "what day is this" comparison in the app (today's date, the
+   current week's Monday, the heatmap, streaks) needs to agree with what the
+   user's calendar actually says, so they all go through this instead. */
+function localDateStr(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function todayStr(){ return localDateStr(new Date()); }
 function timeStr(d){ const dt = d instanceof Date ? d : new Date(d); return dt.toTimeString().slice(0,5); }
 /* Minutes between two "HH:MM" strings on the same day. If end looks earlier
    than start (crossed midnight), assumes it rolled into the next day. */
@@ -775,7 +788,7 @@ function minutesBetweenTimes(startTime, endTime){
 
 function seedData(){
   const today = new Date();
-  const fmt = d => d.toISOString().slice(0,10);
+  const fmt = d => localDateStr(d);
   const daysAgo = n => { const d = new Date(today); d.setDate(d.getDate()-n); return fmt(d); };
 
   const db = {
@@ -913,7 +926,7 @@ function weekKeyForDate(dateStr){
   const d = dateOnly(dateStr);
   const dow = (d.getDay()+6)%7; // Monday = 0
   d.setDate(d.getDate()-dow);
-  return d.toISOString().slice(0,10); // Monday of that week, used as the week key
+  return localDateStr(d); // Monday of that week, used as the week key
 }
 function topSetWeeklyHistory(exerciseName){
   const norm = normalizeName(exerciseName);
@@ -1048,7 +1061,7 @@ function renderHeatmap(){
   const today = new Date();
   const cells = 13*7;
   const cellDates = [];
-  for(let i=cells-1;i>=0;i--){ const d=new Date(today); d.setDate(d.getDate()-i); cellDates.push(d.toISOString().slice(0,10)); }
+  for(let i=cells-1;i>=0;i--){ const d=new Date(today); d.setDate(d.getDate()-i); cellDates.push(localDateStr(d)); }
   cellDates.forEach(dateStr=>{
     const div = document.createElement('div');
     div.className = 'hm-cell';
@@ -1068,14 +1081,14 @@ function renderHeatmap(){
   let cursor = new Date();
   let firstIter = true;
   while(true){
-    const ds = cursor.toISOString().slice(0,10);
+    const ds = localDateStr(cursor);
     if(trained.has(ds)){ current++; cursor.setDate(cursor.getDate()-1); firstIter=false; }
     else if(firstIter){ cursor.setDate(cursor.getDate()-1); firstIter=false; }
     else break;
   }
   document.getElementById('streakCurrent').textContent = current;
   document.getElementById('streakBest').textContent = best;
-  const thisMonth = new Date().toISOString().slice(0,7);
+  const thisMonth = localDateStr(new Date()).slice(0,7);
   document.getElementById('monthCount').textContent = db.sessions.filter(s=>s.date.startsWith(thisMonth)).length;
 }
 function renderSBD(){
@@ -1088,7 +1101,7 @@ function renderWeek(){
   const today = new Date();
   const dow = (today.getDay()+6)%7;
   const monday = new Date(today); monday.setDate(today.getDate()-dow);
-  const mondayStr = monday.toISOString().slice(0,10);
+  const mondayStr = localDateStr(monday);
 
   const wrap = document.getElementById('weekSBDList');
   wrap.innerHTML = '';
