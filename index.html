@@ -2771,39 +2771,76 @@ function closeCategoryEditor(){ document.getElementById('categoryEditorModal').c
 function filterCategoryExercisePicker(){
   renderCategoryExercisePickList(document.getElementById('categoryExerciseSearch').value);
 }
-// Renders the checklist of catalog exercises, filtered by the search box.
-// Selections (categoryEditorSelection) persist across filtering, so typing
-// to narrow the list down and picking a few, then clearing the search to
-// pick more, doesn't lose what's already checked.
+// Doesn't pre-list the whole catalog (too much scrolling with many
+// exercises). Instead: your current picks always show up top as removable
+// chips, and matching exercises only appear once you type in the search box.
 function renderCategoryExercisePickList(query){
   const wrap = document.getElementById('categoryExercisePickList');
   wrap.innerHTML = '';
   const countEl = document.getElementById('categorySelectedCount');
   if(countEl) countEl.textContent = categoryEditorSelection.length ? `(${categoryEditorSelection.length} selected)` : '';
+
+  if(categoryEditorSelection.length){
+    const selLabel = document.createElement('div');
+    selLabel.className = 'hint';
+    selLabel.style.marginBottom = '6px';
+    selLabel.textContent = 'Selected (tap to remove):';
+    wrap.appendChild(selLabel);
+    const selWrap = document.createElement('div');
+    selWrap.className = 'chip-list';
+    selWrap.style.marginBottom = '14px';
+    categoryEditorSelection.forEach(name=>{
+      const c = document.createElement('div');
+      c.className = 'chip selected-blue';
+      c.textContent = name;
+      c.onclick = ()=> toggleCategoryExercisePick(name);
+      selWrap.appendChild(c);
+    });
+    wrap.appendChild(selWrap);
+  }
+
   if(!db.exerciseCatalog.length){
-    wrap.innerHTML = '<div class="empty" style="padding:12px 0;">Add exercises to your catalog first (from any workout).</div>';
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.style.padding = '4px 0';
+    empty.textContent = 'Add exercises to your catalog first (from any workout).';
+    wrap.appendChild(empty);
     return;
   }
   const q = normalizeSearch(query);
-  const names = db.exerciseCatalog.filter(name=> normalizeSearch(name).includes(q));
-  if(!names.length){
-    wrap.innerHTML = '<div class="empty" style="padding:12px 0;">No matches.</div>';
+  if(!q){
+    const hint = document.createElement('div');
+    hint.className = 'empty';
+    hint.style.padding = '4px 0';
+    hint.textContent = 'Type above to find and add exercises.';
+    wrap.appendChild(hint);
     return;
   }
-  names.forEach(name=>{
+  const matches = db.exerciseCatalog.filter(name=> normalizeSearch(name).includes(q));
+  if(!matches.length){
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.style.padding = '4px 0';
+    empty.textContent = 'No matches.';
+    wrap.appendChild(empty);
+    return;
+  }
+  const resWrap = document.createElement('div');
+  resWrap.className = 'chip-list';
+  matches.forEach(name=>{
     const c = document.createElement('div');
     c.className = 'chip' + (categoryEditorSelection.includes(name) ? ' selected-blue' : '');
     c.textContent = name;
-    c.onclick = ()=> toggleCategoryExercisePick(name, c);
-    wrap.appendChild(c);
+    c.onclick = ()=> toggleCategoryExercisePick(name);
+    resWrap.appendChild(c);
   });
+  wrap.appendChild(resWrap);
 }
-function toggleCategoryExercisePick(name, el){
+function toggleCategoryExercisePick(name){
   const pos = categoryEditorSelection.indexOf(name);
-  if(pos>-1){ categoryEditorSelection.splice(pos,1); el.classList.remove('selected-blue'); }
-  else{ categoryEditorSelection.push(name); el.classList.add('selected-blue'); }
-  const countEl = document.getElementById('categorySelectedCount');
-  if(countEl) countEl.textContent = categoryEditorSelection.length ? `(${categoryEditorSelection.length} selected)` : '';
+  if(pos>-1) categoryEditorSelection.splice(pos,1);
+  else categoryEditorSelection.push(name);
+  renderCategoryExercisePickList(document.getElementById('categoryExerciseSearch').value);
 }
 function saveCategoryTimer(){
   const name = document.getElementById('categoryNameInput').value.trim();
