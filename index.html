@@ -201,6 +201,13 @@
   .ex-block{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:12px; position:relative;}
   .ex-block.superset-a{border-left:4px solid var(--blue);}
   .ex-block.superset-b{border-left:4px solid var(--blue); margin-top:-6px;}
+  .superset-focus-banner{
+    background:var(--blue); border-radius:14px; padding:14px 16px; margin-bottom:16px;
+    display:flex; justify-content:space-between; align-items:center; gap:12px;
+  }
+  .superset-focus-banner .label{font-size:11px; text-transform:uppercase; letter-spacing:1px; font-weight:800;}
+  .superset-focus-banner .sub{font-size:11px; opacity:0.85; margin-top:2px;}
+  .superset-focus-banner .btn-secondary{width:auto; white-space:nowrap; margin-top:0;}
   .superset-tag{
     font-size:10px; color:var(--blue); text-transform:uppercase; letter-spacing:0.5px; font-weight:700; margin-bottom:4px;
   }
@@ -531,6 +538,28 @@
   </div>
 </div>
 
+<!-- POPUP: Exercise-group rest timer editor -->
+<div class="modal-backdrop" id="categoryEditorModal">
+  <div class="modal-card">
+    <button class="modal-close" onclick="closeCategoryEditor()">×</button>
+    <div class="modal-title" id="categoryEditorTitle">New timer group</div>
+    <div class="field">
+      <label>Group name</label>
+      <input type="text" id="categoryNameInput" placeholder="e.g. Arms">
+    </div>
+    <div class="field" style="margin-top:12px;">
+      <label>Rest timer (minutes)</label>
+      <input type="number" id="categoryMinutesInput" step="0.5" min="0.5">
+    </div>
+    <div class="field" style="margin-top:12px;">
+      <label>Exercises in this group <span id="categorySelectedCount" style="color:var(--grey); text-transform:none; letter-spacing:0;"></span></label>
+      <input type="text" id="categoryExerciseSearch" placeholder="Search your exercises..." oninput="filterCategoryExercisePicker()">
+      <div class="chip-list" id="categoryExercisePickList" style="margin-top:10px;"></div>
+    </div>
+    <button class="btn-primary" onclick="saveCategoryTimer()">Save timer group</button>
+  </div>
+</div>
+
 <!-- POPUP: Per-exercise edit menu (Substitute / Unlink / Remove) -->
 <div class="modal-backdrop" id="exerciseMenuModal">
   <div class="modal-card">
@@ -631,6 +660,13 @@
     </div>
     <div class="field" style="margin-top:6px;">
       <button class="btn-secondary" style="width:100%;" onclick="saveRestSetting()">Save rest timer</button>
+    </div>
+
+    <div class="field" style="margin-top:34px; padding-top:18px; border-top:1px solid var(--line);">
+      <label>Rest timers by exercise group</label>
+      <small class="hint">Group exercises that need a different rest time — e.g. "Arms": Bicep Curl, Tricep Extension, Overhead Press — and any exercise in that group will use its timer instead of the default above.</small>
+      <div id="categoryTimerList" style="margin-top:10px;"></div>
+      <button class="btn-secondary" style="width:100%; margin-top:10px;" onclick="openCategoryEditor()">+ New timer group</button>
     </div>
 
     <div class="field" style="margin-top:34px; padding-top:18px; border-top:1px solid var(--line);">
@@ -752,6 +788,7 @@ function loadDB(){
     try {
       const parsed = JSON.parse(raw);
       if(!parsed.settings) parsed.settings = { restSeconds: 180 };
+      if(!parsed.settings.categories) parsed.settings.categories = [];
       if(!parsed.basicAssignments) parsed.basicAssignments = {};
       return parsed;
     } catch(e){ /* fallthrough to seed */ }
@@ -792,7 +829,7 @@ function seedData(){
   const daysAgo = n => { const d = new Date(today); d.setDate(d.getDate()-n); return fmt(d); };
 
   const db = {
-    settings: { restSeconds: 180 },
+    settings: { restSeconds: 180, categories: [] },
     goals: { squat: 140, bench: 100, deadlift: 180 },
     basicAssignments: {},
     exerciseCatalog: ['Squat','Bench Press','Deadlift','Overhead Press','Pull-ups','Barbell Row','Dips','Leg Press','Leg Curl','Bicep Curl','Tricep Extension'],
@@ -1420,6 +1457,9 @@ async function deleteCurrentRoutine(){
 /* ================= LIVE WORKOUT ================= */
 let liveSession = null; // { routine, exercises:[{name, sets:[{w,r}], supersetGroup, supersetRole}], startedAt }
 let restInterval = null, restRemaining = 0;
+// When set to a supersetGroup id, the live workout view shows only the two
+// exercises linked in that group ("focus mode") instead of the full list.
+let focusedSupersetGroup = null;
 const ACTIVE_SESSION_KEY = 'sbd_tracker_active_session';
 
 function saveActiveSession(){
@@ -1592,7 +1632,29 @@ function renderLiveWorkout(){
     body.innerHTML = '<div class="empty">Add an exercise to get started.</div>';
     return;
   }
-  liveSession.exercises.forEach((ex, exIdx)=>{
+  // If the focused superset group no longer exists (unlinked, exercise
+  // removed, etc.), fall back to the normal full-list view.
+  if(focusedSupersetGroup && !liveSession.exercises.some(e=> e.supersetGroup===focusedSupersetGroup)){
+    focusedSupersetGroup = null;
+  }
+  if(focusedSupersetGroup){
+    const banner = document.createElement('div');
+    banner.className = 'superset-focus-banner';
+    banner.innerHTML = `
+      <div>
+        <div class="label">Superset focus</div>
+        <div class="sub">Only these two exercises are shown</div>
+      </div>
+      <button class="btn-secondary" onclick="exitSupersetFocus()">← Back to workout</button>
+    `;
+    body.appendChild(banner);
+  }
+  const visibleExIdx = liveSession.exercises
+    .map((ex, idx)=> idx)
+    .filter(idx=> !focusedSupersetGroup || liveSession.exercises[idx].supersetGroup===focusedSupersetGroup);
+
+  visibleExIdx.forEach(exIdx=>{
+    const ex = liveSession.exercises[exIdx];
     const last = lastPerformance(ex.name);
     const pr = prFor(ex.name);
     const block = document.createElement('div');
@@ -1623,6 +1685,7 @@ function renderLiveWorkout(){
           ${prStr ? `<div class="pr">${prStr}</div>` : ''}
         </div>
         <div class="ex-actions">
+          ${ex.supersetGroup && !focusedSupersetGroup ? `<button class="edit-exercise-btn" onclick="enterSupersetFocus('${ex.supersetGroup}')">🎯 Focus</button>` : ''}
           <button class="timer-btn" onclick="startManualRest(${exIdx})">⏱ Start rest</button>
           <button class="edit-exercise-btn" onclick="openExerciseMenu(${exIdx})">✎ Edit</button>
         </div>
@@ -1710,14 +1773,14 @@ function handleSetCompleted(exIdx){
   // Everything else (solo exercise, or exercise B of a pair): give the user
   // 5 seconds to start the rest timer manually. If they don't, it starts
   // itself and lets them know with a notification + alert sound.
-  scheduleAutoRest();
+  scheduleAutoRest(restSecondsForExercise(ex.name));
 }
 let pendingAutoRestTimeout = null;
-function scheduleAutoRest(){
+function scheduleAutoRest(seconds){
   clearTimeout(pendingAutoRestTimeout);
   pendingAutoRestTimeout = setTimeout(()=>{
     if(!restActive){
-      startRest(db.settings.restSeconds);
+      startRest(seconds);
       vibrateRestEnd();
       playAutoStartAlertSound();
       toast('⏱ Timer started automatically');
@@ -1871,9 +1934,20 @@ function confirmSuperset(){
   liveSession.exercises[bIdx].supersetGroup = groupId;
   liveSession.exercises[bIdx].supersetRole = 'b';
   closeOverlay('supersetPickerOverlay');
-  renderLiveWorkout();
   saveActiveSession();
   toast('Superset linked');
+  enterSupersetFocus(groupId);
+}
+// Focus mode: shows only the two exercises in a superset, so you're not
+// scrolling past the rest of the workout mid-pair. "Back to workout" returns
+// to the full active-workout view.
+function enterSupersetFocus(groupId){
+  focusedSupersetGroup = groupId;
+  renderLiveWorkout();
+}
+function exitSupersetFocus(){
+  focusedSupersetGroup = null;
+  renderLiveWorkout();
 }
 function unlinkSuperset(exIdx, silent){
   const ex = liveSession.exercises[exIdx];
@@ -1882,6 +1956,7 @@ function unlinkSuperset(exIdx, silent){
   liveSession.exercises.forEach(o=>{
     if(o.supersetGroup === groupId){ o.supersetGroup=null; o.supersetRole=null; }
   });
+  if(focusedSupersetGroup === groupId) focusedSupersetGroup = null;
   if(!silent){ renderLiveWorkout(); saveActiveSession(); toast('Superset unlinked'); }
 }
 
@@ -2272,8 +2347,10 @@ function updateRestDimOverlay(){
     overlay.classList.remove('active');
   }
 }
+let lastRestSeconds = null;
 function startRest(seconds){
   clearTimeout(pendingAutoRestTimeout);
+  lastRestSeconds = seconds;
   restActive = true;
   restRemaining = seconds;
   document.getElementById('restFabWrap').classList.add('active');
@@ -2288,7 +2365,7 @@ function startRest(seconds){
     updateRestDimOverlay();
   },1000);
 }
-function restartRest(){ startRest(db.settings.restSeconds); }
+function restartRest(){ startRest(lastRestSeconds != null ? lastRestSeconds : db.settings.restSeconds); }
 function toggleRestControls(){ document.getElementById('restControls').classList.toggle('open'); }
 function updateRestDisplay(){
   const m = Math.floor(restRemaining/60).toString().padStart(2,'0');
@@ -2309,7 +2386,8 @@ function stopRest(){
   updateRestDimOverlay();
 }
 function startManualRest(exIdx){
-  startRest(db.settings.restSeconds);
+  const ex = liveSession.exercises[exIdx];
+  startRest(restSecondsForExercise(ex.name));
   document.getElementById('restControls').classList.add('open');
 }
 
@@ -2639,9 +2717,124 @@ function saveGoals(){
   toast('Goals updated');
 }
 
+/* ================= EXERCISE GROUP REST TIMERS ================= */
+// Lets the user group exercises (e.g. "Arms": Bicep Curl, Tricep Extension,
+// Overhead Press) and give that group its own rest timer, which overrides
+// the default rest timer above for any exercise that belongs to it.
+function restSecondsForExercise(name){
+  const cats = db.settings.categories || [];
+  const match = cats.find(c=> (c.exercises||[]).includes(name));
+  return match ? match.seconds : db.settings.restSeconds;
+}
+let categoryEditorId = null; // null = creating new, string = editing existing group
+let categoryEditorSelection = [];
+function renderCategoryTimers(){
+  const wrap = document.getElementById('categoryTimerList');
+  if(!wrap) return;
+  const cats = db.settings.categories || [];
+  if(!cats.length){
+    wrap.innerHTML = '<div class="empty" style="padding:16px 0;">No custom timer groups yet.</div>';
+    return;
+  }
+  wrap.innerHTML = '';
+  cats.forEach(cat=>{
+    const mins = cat.seconds/60;
+    const minsLabel = Number.isInteger(mins) ? mins : mins.toFixed(1);
+    const row = document.createElement('div');
+    row.className = 'session-row';
+    row.innerHTML = `
+      <div class="session-top">
+        <span class="name">${cat.name}</span>
+        <span class="date">${minsLabel} min</span>
+      </div>
+      <div class="session-meta"><span>${(cat.exercises||[]).join(', ') || 'No exercises assigned'}</span></div>
+      <div style="display:flex; gap:16px; margin-top:10px;">
+        <span class="edit-icon" onclick="openCategoryEditor('${cat.id}')">Edit</span>
+        <span class="edit-icon" style="color:var(--grey);" onclick="deleteCategoryTimer('${cat.id}')">Delete</span>
+      </div>
+    `;
+    wrap.appendChild(row);
+  });
+}
+function openCategoryEditor(catId){
+  categoryEditorId = catId || null;
+  const cat = catId ? (db.settings.categories||[]).find(c=> c.id===catId) : null;
+  document.getElementById('categoryEditorTitle').textContent = cat ? 'Edit timer group' : 'New timer group';
+  document.getElementById('categoryNameInput').value = cat ? cat.name : '';
+  document.getElementById('categoryMinutesInput').value = cat ? (cat.seconds/60) : '';
+  categoryEditorSelection = cat ? [...(cat.exercises||[])] : [];
+  document.getElementById('categoryExerciseSearch').value = '';
+  renderCategoryExercisePickList('');
+  document.getElementById('categoryEditorModal').classList.add('active');
+}
+function closeCategoryEditor(){ document.getElementById('categoryEditorModal').classList.remove('active'); }
+function filterCategoryExercisePicker(){
+  renderCategoryExercisePickList(document.getElementById('categoryExerciseSearch').value);
+}
+// Renders the checklist of catalog exercises, filtered by the search box.
+// Selections (categoryEditorSelection) persist across filtering, so typing
+// to narrow the list down and picking a few, then clearing the search to
+// pick more, doesn't lose what's already checked.
+function renderCategoryExercisePickList(query){
+  const wrap = document.getElementById('categoryExercisePickList');
+  wrap.innerHTML = '';
+  const countEl = document.getElementById('categorySelectedCount');
+  if(countEl) countEl.textContent = categoryEditorSelection.length ? `(${categoryEditorSelection.length} selected)` : '';
+  if(!db.exerciseCatalog.length){
+    wrap.innerHTML = '<div class="empty" style="padding:12px 0;">Add exercises to your catalog first (from any workout).</div>';
+    return;
+  }
+  const q = normalizeSearch(query);
+  const names = db.exerciseCatalog.filter(name=> normalizeSearch(name).includes(q));
+  if(!names.length){
+    wrap.innerHTML = '<div class="empty" style="padding:12px 0;">No matches.</div>';
+    return;
+  }
+  names.forEach(name=>{
+    const c = document.createElement('div');
+    c.className = 'chip' + (categoryEditorSelection.includes(name) ? ' selected-blue' : '');
+    c.textContent = name;
+    c.onclick = ()=> toggleCategoryExercisePick(name, c);
+    wrap.appendChild(c);
+  });
+}
+function toggleCategoryExercisePick(name, el){
+  const pos = categoryEditorSelection.indexOf(name);
+  if(pos>-1){ categoryEditorSelection.splice(pos,1); el.classList.remove('selected-blue'); }
+  else{ categoryEditorSelection.push(name); el.classList.add('selected-blue'); }
+  const countEl = document.getElementById('categorySelectedCount');
+  if(countEl) countEl.textContent = categoryEditorSelection.length ? `(${categoryEditorSelection.length} selected)` : '';
+}
+function saveCategoryTimer(){
+  const name = document.getElementById('categoryNameInput').value.trim();
+  const minutes = parseFloat(document.getElementById('categoryMinutesInput').value);
+  if(!name){ toast('Give the group a name'); return; }
+  if(!minutes || minutes<=0){ toast('Enter a valid number of minutes'); return; }
+  if(!categoryEditorSelection.length){ toast('Pick at least one exercise'); return; }
+  if(!db.settings.categories) db.settings.categories = [];
+  if(categoryEditorId){
+    const cat = db.settings.categories.find(c=> c.id===categoryEditorId);
+    if(cat){ cat.name = name; cat.seconds = Math.round(minutes*60); cat.exercises = [...categoryEditorSelection]; }
+  } else {
+    db.settings.categories.push({ id: uid('cat'), name, seconds: Math.round(minutes*60), exercises: [...categoryEditorSelection] });
+  }
+  saveDB();
+  closeCategoryEditor();
+  renderCategoryTimers();
+  toast('Timer group saved');
+}
+async function deleteCategoryTimer(catId){
+  if(!await appConfirm('Delete this timer group? Its exercises will fall back to the default rest timer.', {title:'Delete timer group', confirmText:'Delete'})) return;
+  db.settings.categories = (db.settings.categories||[]).filter(c=> c.id!==catId);
+  saveDB();
+  renderCategoryTimers();
+  toast('Timer group deleted');
+}
+
 /* ================= SETTINGS / BACKUP ================= */
 function openSettings(){
   document.getElementById('restMinutesInput').value = db.settings.restSeconds/60;
+  renderCategoryTimers();
   document.getElementById('settingsOverlay').classList.add('active');
 }
 function saveRestSetting(){
@@ -2655,7 +2848,7 @@ async function resetAllData(){
   if(!await appConfirm('This will delete ALL your data (routines, workouts, goals, catalog). Are you sure?', {title:'Reset data', confirmText:'Continue'})) return;
   if(!await appConfirm('Last confirmation: this cannot be undone. Delete everything?', {title:'Are you sure?', confirmText:'Delete everything'})) return;
   localStorage.removeItem(DB_KEY);
-  db = { settings:{restSeconds:180}, goals:{squat:0,bench:0,deadlift:0}, basicAssignments:{}, exerciseCatalog:[], routines:[], sessions:[] };
+  db = { settings:{restSeconds:180, categories:[]}, goals:{squat:0,bench:0,deadlift:0}, basicAssignments:{}, exerciseCatalog:[], routines:[], sessions:[] };
   saveDB();
   closeOverlay('settingsOverlay');
   renderAll();
@@ -2770,6 +2963,7 @@ async function restoreBackup(){
       const parsed = JSON.parse(e.target.result);
       if(!parsed.sessions || !parsed.routines){ toast('Invalid file'); return; }
       if(!parsed.settings) parsed.settings = { restSeconds: 180 };
+      if(!parsed.settings.categories) parsed.settings.categories = [];
       db = parsed;
       saveDB();
       closeOverlay('settingsOverlay');
