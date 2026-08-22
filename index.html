@@ -103,15 +103,6 @@
   .streak-row{display:flex; gap:20px; margin-top:12px;}
   .streak{font-size:11px; color:var(--grey);}
   .streak b{color:var(--white); font-size:18px; display:block; font-weight:800;}
-  .dashboard-carousel{position:relative; overflow:hidden; touch-action:pan-y;}
-  .dashboard-slides{display:grid; width:100%; max-width:100%;}
-  .dashboard-slide{grid-area:1 / 1; width:100%; min-width:0; max-width:100%; overflow:hidden; transform:translateX(100%); transition:transform .28s ease;}
-  .dashboard-slide:first-child{transform:translateX(0);}
-  .carousel-nav{display:flex; align-items:center; justify-content:center; gap:16px; margin-top:14px;}
-  .carousel-arrow{background:none; border:1px solid var(--line); border-radius:8px; width:32px; height:32px; color:var(--white); font-size:20px; line-height:1;}
-  .carousel-dots{display:flex; gap:6px;}
-  .carousel-dot{width:6px; height:6px; border-radius:50%; background:var(--line);}
-  .carousel-dot.active{background:var(--red);}
   .last-training-date{font-size:34px; font-weight:800; margin:18px 0 4px;}
   .last-training-meta{color:var(--grey); font-size:12px;}
   .week-heading{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:14px;}
@@ -489,30 +480,22 @@
 
   <!-- DASHBOARD -->
   <section id="dashboard" class="screen active">
-    <div class="card dashboard-carousel" id="dashboardCarousel">
-      <div class="dashboard-slides" id="dashboardSlides">
-        <div class="dashboard-slide">
-          <div class="card-label">Last training</div>
-          <div class="last-training-date" id="lastTrainingDate">—</div>
-          <div class="last-training-meta" id="lastTrainingMeta">No workouts logged yet</div>
-          <div class="heatmap-grid" id="heatmap" style="margin-top:20px;"></div>
-          <div class="hm-legend"><span>last 13 weeks</span><span>● trained</span></div>
-          <div class="streak-row">
-            <div class="streak"><b id="streakCurrent">0</b>current streak</div>
-            <div class="streak"><b id="streakBest">0</b>best streak</div>
-            <div class="streak"><b id="monthCount">0</b>this month</div>
-          </div>
-        </div>
-        <div class="dashboard-slide">
-          <div class="week-heading"><h3>This week</h3><span id="weekRange"></span></div>
-          <div class="week-days" id="weekDays"></div>
-          <div class="week-today-plan" id="weekTodayPlan"></div>
-        </div>
-      </div>
-      <div class="carousel-nav">
-        <button class="carousel-arrow" onclick="moveDashboardSlide(-1)" aria-label="Previous dashboard view">‹</button>
-        <div class="carousel-dots"><span class="carousel-dot active" data-slide-dot="0"></span><span class="carousel-dot" data-slide-dot="1"></span></div>
-        <button class="carousel-arrow" onclick="moveDashboardSlide(1)" aria-label="Next dashboard view">›</button>
+    <div class="card">
+      <div class="week-heading"><h3>This week</h3><span id="weekRange"></span></div>
+      <div class="week-days" id="weekDays"></div>
+      <div class="week-today-plan" id="weekTodayPlan"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Last training</div>
+      <div class="last-training-date" id="lastTrainingDate">—</div>
+      <div class="last-training-meta" id="lastTrainingMeta">No workouts logged yet</div>
+      <div class="heatmap-grid" id="heatmap" style="margin-top:20px;"></div>
+      <div class="hm-legend"><span>last 13 weeks</span><span>● trained</span></div>
+      <div class="streak-row">
+        <div class="streak"><b id="streakCurrent">0</b>current streak</div>
+        <div class="streak"><b id="streakBest">0</b>best streak</div>
+        <div class="streak"><b id="monthCount">0</b>this month</div>
       </div>
     </div>
 
@@ -1258,29 +1241,6 @@ function renderWeeklyDashboard(){
         ? `Today · planned<strong>${todayPlans.join(', ')}</strong>`
         : 'Today · rest day<strong>No workout scheduled</strong>';
   }
-}
-let dashboardSlide = 0;
-function moveDashboardSlide(direction){
-  dashboardSlide = (dashboardSlide + direction + 2) % 2;
-  const slides = document.getElementById('dashboardSlides');
-  if(slides) slides.querySelectorAll('.dashboard-slide').forEach((slide, index)=>{
-    slide.style.transform = `translateX(${(index-dashboardSlide)*100}%)`;
-  });
-  document.querySelectorAll('[data-slide-dot]').forEach(dot=> dot.classList.toggle('active', parseInt(dot.dataset.slideDot,10)===dashboardSlide));
-}
-function initDashboardCarousel(){
-  const carousel = document.getElementById('dashboardCarousel');
-  if(!carousel || carousel.dataset.ready) return;
-  carousel.dataset.ready = 'true';
-  let startX = null;
-  carousel.addEventListener('touchstart', e=>{ startX = e.touches[0].clientX; }, {passive:true});
-  carousel.addEventListener('touchend', e=>{
-    if(startX===null) return;
-    const delta = e.changedTouches[0].clientX - startX;
-    if(Math.abs(delta)>40) moveDashboardSlide(delta<0 ? 1 : -1);
-    startX = null;
-  }, {passive:true});
-  moveDashboardSlide(0);
 }
 function renderSBD(){
   const cur = currentSBD(), goal = goalSBD();
@@ -3253,7 +3213,6 @@ function closeOverlay(id){ document.getElementById(id).classList.remove('active'
 function renderAll(){
   renderHeatmap();
   renderWeeklyDashboard();
-  initDashboardCarousel();
   renderSBD();
   renderWeek();
   renderRoutines();
