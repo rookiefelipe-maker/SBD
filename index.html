@@ -984,7 +984,7 @@ function normalizeName(n){
 }
 const BASIC_ALIASES = {
   squat: ['squat', 'sentadilla', 'sentadillas'],
-  bench: ['bench press', 'bench', 'press banca', 'press de banca', 'banca'],
+  bench: ['bench press', 'bench', 'competition bench', 'competition bench press', 'press banca', 'press de banca', 'banca'],
   deadlift: ['deadlift', 'peso muerto', 'pesomuerto']
 };
 const BASICS = { squat:'Squat', bench:'Bench Press', deadlift:'Deadlift' };
@@ -2232,10 +2232,9 @@ async function finishWorkout(){
 function computeBasicsSummary(session){
   const summary = {};
   Object.keys(BASICS).forEach(key=>{
-    const aliases = BASIC_ALIASES[key];
     let best = null, bestE1RM = null;
     session.exercises.forEach(e=>{
-      if(!aliases.includes(normalizeName(e.name))) return;
+      if(basicKeyForExercise(e.name) !== key) return;
       e.sets.forEach(set=>{
         if(!best || set.w > best.w) best = { w:set.w, r:set.r };
         const e1rm = epley1RM(set.w, set.r);
@@ -2660,10 +2659,9 @@ function openSessionDetail(sessionId){
   const body = document.getElementById('sessionDetailBody');
   let vol=0, totalSets=0;
   s.exercises.forEach(e=> e.sets.forEach(set=>{ vol += set.w*set.r; totalSets++; }));
-  // Basics e1RM: use the stored value if this session already has one
-  // (saved since the Epley e1RM feature shipped); otherwise recompute it
-  // on the fly from the saved sets, so older sessions show it too.
-  const basicsSummary = s.basicsSummary || computeBasicsSummary(s);
+  // Recompute from the saved sets so older sessions and renamed/assigned
+  // basic lifts show the same e1RM rules as the finish popup.
+  const basicsSummary = computeBasicsSummary(s);
   let basicsHtml = '';
   Object.keys(BASICS).forEach(key=>{
     const bs = basicsSummary[key];
