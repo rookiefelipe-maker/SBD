@@ -128,6 +128,9 @@
   .schedule-day:has(input:checked) .schedule-check{color:var(--white);}
   .schedule-hint{font-size:11px; color:var(--grey); margin-top:10px;}
   #routineEditorOverlay .overlay-body{padding-bottom:190px;}
+  .draft-order-actions{display:flex; align-items:center; gap:6px; margin-left:10px;}
+  .draft-order-btn{width:30px; height:30px; padding:0; background:var(--charcoal); border:1px solid var(--line); border-radius:7px; color:var(--white); font-size:15px; line-height:1;}
+  .draft-order-btn:disabled{opacity:.3;}
 
   .routine-card{
     background:var(--card); border:1px solid var(--line); border-left:4px solid var(--red);
@@ -190,11 +193,19 @@
   }
   nav button{
     flex:1; background:none; border:none; color:var(--grey); padding:12px 0 10px;
-    font-size:10px; letter-spacing:1px; text-transform:uppercase;
+    font-size:10px; letter-spacing:1px; text-transform:uppercase; min-width:0;
     display:flex; flex-direction:column; align-items:center; gap:4px; font-weight:600;
   }
   nav button .ic{font-size:18px;}
   nav button.active{color:var(--red);}
+  nav button .nav-icon{width:55px; height:55px; padding:10px; display:block; box-sizing:border-box; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round;}
+  nav button.workout-nav-button{position:relative; z-index:1; color:var(--white);}
+  nav button.workout-nav-button{margin-top:-18px; padding-top:0;}
+  nav button.workout-nav-button .nav-icon{width:58px; height:58px; padding:16px; border:2px solid var(--red); border-radius:50%; background:var(--red); color:var(--white); animation:workoutPulse 2.2s ease-in-out infinite;}
+  nav button.workout-nav-button span{color:var(--white); margin-top:2px;}
+  nav button.workout-nav-button.active .nav-icon{background:var(--red); color:var(--white);}
+  @keyframes workoutPulse{0%,100%{box-shadow:0 0 0 0 rgba(224,38,27,.28); transform:scale(1);}50%{box-shadow:0 0 0 7px rgba(224,38,27,0); transform:scale(1.06);}}
+  @media (prefers-reduced-motion:reduce){nav button.workout-nav-button .nav-icon{animation:none;}}
 
   h2.title{font-size:13px; letter-spacing:2px; text-transform:uppercase; color:var(--grey); margin:18px 0 12px 2px;}
 
@@ -538,9 +549,9 @@
 </main>
 
 <nav>
-  <button class="active" data-screen="dashboard" onclick="showScreen('dashboard')"><span class="ic">𓃑</span>Dashboard</button>
-  <button data-screen="entrenamiento" onclick="showScreen('entrenamiento')"><span class="ic">||—||</span>Workout</button>
-  <button data-screen="stats" onclick="showScreen('stats')"><span class="ic">▲</span>Stats</button>
+  <button class="active" data-screen="dashboard" onclick="showScreen('dashboard')" aria-label="Home"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7"></path><path d="M5 9.5V21h14V9.5"></path><path d="M9 21v-6h6v6"></path></svg><span>Home</span></button>
+  <button class="workout-nav-button" data-screen="entrenamiento" onclick="showScreen('entrenamiento')" aria-label="Workout"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 9 6-9 6z" fill="currentColor" stroke="none"></path></svg><span>Workout</span></button>
+  <button data-screen="stats" onclick="showScreen('stats')" aria-label="Stats"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5"></path><path d="M4 19h17"></path><path d="m7 15 4-4 3 2 6-7"></path><path d="M17 6h3v3"></path></svg><span>Stats</span></button>
 </nav>
 
 <!-- OVERLAY: Routine editor -->
@@ -1373,6 +1384,12 @@ function removeDraftExerciseAt(idx){
 function updateDraftExerciseName(idx, value){
   routineDraftExercises[idx].name = value;
 }
+function moveDraftExercise(idx, direction){
+  const nextIdx = idx + direction;
+  if(nextIdx < 0 || nextIdx >= routineDraftExercises.length) return;
+  [routineDraftExercises[idx], routineDraftExercises[nextIdx]] = [routineDraftExercises[nextIdx], routineDraftExercises[idx]];
+  renderRoutineDraftExercises();
+}
 function toggleRoutineScheduleDay(day){
   const pos = routineDraftSchedule.indexOf(day);
   if(pos >= 0) routineDraftSchedule.splice(pos, 1);
@@ -1427,7 +1444,11 @@ function renderRoutineDraftExercises(){
           <input type="text" class="draft-ex-name" placeholder="Exercise name" value="${ex.name.replace(/"/g,'&quot;')}"
             list="exerciseCatalogList" autocomplete="off"
             oninput="updateDraftExerciseName(${idx}, this.value)">
-          ${ex._origName ? '<small class="hint" style="margin-top:4px; margin-bottom:0;">Editing renames this exercise and its history in THIS template only — it doesn\'t swap in a different one, and won\'t affect other templates</small>' : ''}
+          ${ex._origName ? '<small class="hint" style="margin-top:4px; margin-bottom:0;">' : ''}
+        </div>
+        <div class="draft-order-actions">
+          <button type="button" class="draft-order-btn" ${idx===0 ? 'disabled' : ''} aria-label="Move exercise up" onclick="moveDraftExercise(${idx},-1)">↑</button>
+          <button type="button" class="draft-order-btn" ${idx===routineDraftExercises.length-1 ? 'disabled' : ''} aria-label="Move exercise down" onclick="moveDraftExercise(${idx},1)">↓</button>
         </div>
         <button class="rm-exercise" style="margin-left:10px; white-space:nowrap;" onclick="removeDraftExerciseAt(${idx})">Remove</button>
       </div>
@@ -3209,7 +3230,8 @@ function showScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
-  document.querySelector(`nav button[data-screen="${id}"]`).classList.add('active');
+  const navButton = document.querySelector(`nav button[data-screen="${id}"]`);
+  if(navButton) navButton.classList.add('active');
 }
 function closeOverlay(id){ document.getElementById(id).classList.remove('active'); }
 
