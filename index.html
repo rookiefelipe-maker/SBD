@@ -1618,6 +1618,8 @@ let workoutClockInterval = null;
 // When set to a supersetGroup id, the live workout view shows only the two
 // exercises linked in that group ("focus mode") instead of the full list.
 let focusedSupersetGroup = null;
+// Groups the user explicitly chose to view one-at-a-time via "Show one at a time".
+let dismissedSupersetGroups = new Set();
 const ACTIVE_SESSION_KEY = 'sbd_tracker_active_session';
 
 function saveActiveSession(){
@@ -1846,11 +1848,39 @@ function renderLiveWorkout(){
   const stage = document.createElement('div');
   stage.className = 'focus-stage';
   body.appendChild(stage);
-  const visibleExIdx = [liveSession.focusedExerciseIndex];
+
+  // If the focused exercise is linked in a superset (and the user hasn't
+  // dismissed that group's combined view), show both linked exercises
+  // together instead of just one at a time.
+  const focusedEx = liveSession.exercises[liveSession.focusedExerciseIndex];
+  if(focusedEx.supersetGroup && !dismissedSupersetGroups.has(focusedEx.supersetGroup)){
+    focusedSupersetGroup = focusedEx.supersetGroup;
+  } else {
+    focusedSupersetGroup = null;
+  }
+  let visibleExIdx = [liveSession.focusedExerciseIndex];
+  let lastVisibleIdx = liveSession.focusedExerciseIndex;
+  if(focusedSupersetGroup){
+    visibleExIdx = liveSession.exercises.reduce((arr,o,i)=>{ if(o.supersetGroup===focusedSupersetGroup) arr.push(i); return arr; },[]);
+    lastVisibleIdx = Math.max(...visibleExIdx);
+  }
+
   const progress = document.createElement('div');
   progress.className = 'focus-progress';
   progress.innerHTML = `<span></span><strong>Exercise ${liveSession.focusedExerciseIndex + 1} of ${totalExercises}</strong>`;
   stage.appendChild(progress);
+
+  if(focusedSupersetGroup){
+    const banner = document.createElement('div');
+    banner.className = 'superset-focus-banner';
+    banner.innerHTML = `
+      <div>
+        <div class="label">Superset focus</div>
+        <div class="sub">Both linked exercises are shown together</div>
+      </div>
+      <button class="btn-secondary" onclick="exitSupersetFocus()">Show one at a time</button>`;
+    stage.appendChild(banner);
+  }
 
   visibleExIdx.forEach(exIdx=>{
     const ex = liveSession.exercises[exIdx];
@@ -1890,7 +1920,7 @@ function renderLiveWorkout(){
   });
   const nextPrompt = document.createElement('div');
   nextPrompt.className = 'next-exercise-prompt';
-  const nextExercise = liveSession.exercises[liveSession.focusedExerciseIndex + 1];
+  const nextExercise = liveSession.exercises[lastVisibleIdx + 1];
   nextPrompt.innerHTML = nextExercise
     ? `Next exercise<strong>${nextExercise.name}</strong>`
     : '<strong>Last exercise</strong>Finish the workout when you are ready.';
@@ -1970,13 +2000,27 @@ function handleSetCompleted(exIdx){
   // Give the user 5 seconds to start the rest timer manually. If they don't,
   // it starts itself and lets them know with a notification + alert sound.
   scheduleAutoRest(restSecondsForExercise(ex.name));
-  if(ex.sets.every(set=> set.w != null && set.r != null && set.w > 0 && set.r > 0)){
-    advanceFocusedExercise(exIdx);
+  const exDone = ex.sets.every(set=> set.w != null && set.r != null && set.w > 0 && set.r > 0);
+  if(!exDone) return;
+  if(focusedSupersetGroup && ex.supersetGroup === focusedSupersetGroup){
+    const partner = liveSession.exercises.find(o=> o!==ex && o.supersetGroup===focusedSupersetGroup);
+    const partnerDone = !partner || partner.sets.every(set=> set.w != null && set.r != null && set.w > 0 && set.r > 0);
+    if(!partnerDone) return; // wait for the other linked exercise to finish too
   }
+  advanceFocusedExercise(exIdx);
 }
 function advanceFocusedExercise(exIdx){
-  if(!liveSession || liveSession.focusedExerciseIndex !== exIdx) return;
-  liveSession.focusedExerciseIndex++;
+  if(!liveSession) return;
+  const ex = liveSession.exercises[exIdx];
+  if(focusedSupersetGroup && ex.supersetGroup === focusedSupersetGroup){
+    const groupIdxs = liveSession.exercises.reduce((arr,o,i)=>{ if(o.supersetGroup===focusedSupersetGroup) arr.push(i); return arr; },[]);
+    if(liveSession.focusedExerciseIndex !== Math.min(...groupIdxs)) return;
+    liveSession.focusedExerciseIndex = Math.max(...groupIdxs) + 1;
+    focusedSupersetGroup = null;
+  } else {
+    if(liveSession.focusedExerciseIndex !== exIdx) return;
+    liveSession.focusedExerciseIndex++;
+  }
   saveActiveSession();
   renderLiveWorkout();
   updateWorkoutHeader();
@@ -2151,9 +2195,14 @@ function confirmSuperset(){
 // to the full active-workout view.
 function enterSupersetFocus(groupId){
   focusedSupersetGroup = groupId;
+  dismissedSupersetGroups.delete(groupId);
+  const groupIdxs = liveSession.exercises.reduce((arr,o,i)=>{ if(o.supersetGroup===groupId) arr.push(i); return arr; },[]);
+  if(groupIdxs.length) liveSession.focusedExerciseIndex = Math.min(...groupIdxs);
+  saveActiveSession();
   renderLiveWorkout();
 }
 function exitSupersetFocus(){
+  if(focusedSupersetGroup) dismissedSupersetGroups.add(focusedSupersetGroup);
   focusedSupersetGroup = null;
   renderLiveWorkout();
 }
@@ -2165,6 +2214,7 @@ function unlinkSuperset(exIdx, silent){
     if(o.supersetGroup === groupId){ o.supersetGroup=null; o.supersetRole=null; }
   });
   if(focusedSupersetGroup === groupId) focusedSupersetGroup = null;
+  dismissedSupersetGroups.delete(groupId);
   if(!silent){ renderLiveWorkout(); saveActiveSession(); toast('Superset unlinked'); }
 }
 
