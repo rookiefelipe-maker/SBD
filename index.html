@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>SBD Tracker</title>
@@ -648,13 +649,31 @@
 <div class="modal-backdrop" id="workoutMenuModal">
   <div class="modal-card">
     <button class="modal-close" onclick="closeWorkoutMenu()">×</button>
-    <div class="modal-title">Workout actions</div>
-    <button class="action-menu-btn" onclick="closeWorkoutMenu(); openResumeSummary();">▤ Routine Preview</button>
-    <button class="action-menu-btn" onclick="closeWorkoutMenu(); openExercisePicker();">+ Add exercise</button>
-    <button class="action-menu-btn" onclick="closeWorkoutMenu(); openSupersetPicker();">⇄ Link superset</button>
-    <button class="action-menu-btn" onclick="closeWorkoutMenu(); openReorderExercises();">☰ Reorder exercises</button>
-    <button class="action-menu-btn" onclick="closeWorkoutMenu(); openLoadedBar();">🏋️ Loaded bar</button>
-    <button class="action-menu-btn" id="updateRoutineBtn" onclick="closeWorkoutMenu(); updateRoutineFromWorkout();">💾 Update routine</button>
+<div class="modal-title">Workout actions</div>
+
+<button class="action-menu-btn" onclick="closeWorkoutMenu(); openResumeSummary();">
+  <i class="fa-solid fa-magnifying-glass" style="color: rgb(230, 12, 12);"></i> Routine Preview
+</button>
+
+<button class="action-menu-btn" onclick="closeWorkoutMenu(); openExercisePicker();">
+  <i class="fa-solid fa-plus" style="color: rgb(230, 12, 12);"></i> Add exercise
+</button>
+
+<button class="action-menu-btn" onclick="closeWorkoutMenu(); openSupersetPicker();">
+  <i class="fa-solid fa-link" style="color: rgb(230, 12, 12);"></i> Link superset
+</button>
+
+<button class="action-menu-btn" onclick="closeWorkoutMenu(); openReorderExercises();">
+  <i class="fa-solid fa-arrow-down-up-across-line" style="color: rgb(230, 12, 12);"></i> Reorder exercises
+</button>
+
+<button class="action-menu-btn" onclick="closeWorkoutMenu(); openLoadedBar();">
+  <i class="fa-solid fa-dumbbell" style="color: rgb(230, 12, 12);"></i> Loaded bar
+</button>
+
+<button class="action-menu-btn" id="updateRoutineBtn" onclick="closeWorkoutMenu(); updateRoutineFromWorkout();">
+  <i class="fa-regular fa-floppy-disk" style="color: rgb(230, 12, 12);"></i> Update routine
+</button>
   </div>
 </div>
 
@@ -1875,7 +1894,9 @@ function handleWorkoutScroll(){
 }
 function openWorkoutMenu(){
   const btn = document.getElementById('updateRoutineBtn');
-  if(btn) btn.textContent = (liveSession && liveSession.routineId) ? '💾 Update routine' : '💾 Save as routine';
+  if(btn) btn.innerHTML = (liveSession && liveSession.routineId)
+    ? '<i class="fa-regular fa-floppy-disk" style="color: rgb(230, 12, 12);"></i> Update routine'
+    : '<i class="fa-regular fa-floppy-disk" style="color: rgb(230, 12, 12);"></i> Save as routine';
   document.getElementById('workoutMenuModal').classList.add('active');
 }
 function closeWorkoutMenu(){ document.getElementById('workoutMenuModal').classList.remove('active'); }
@@ -1885,7 +1906,7 @@ function openExerciseMenu(exIdx){
   document.getElementById('exerciseMenuTitle').textContent = ex.name;
   const actions = document.getElementById('exerciseMenuActions');
   actions.innerHTML = `
-    <button class="action-menu-btn" onclick="closeExerciseMenu(); openExercisePicker(${exIdx});">⇄ Substitute</button>
+    <button class="action-menu-btn" onclick="closeWorkoutMenu(); openSupersetPicker();"><i class="fa-solid fa-link"></i> Link superset</button>
     ${ex.supersetGroup ? `<button class="action-menu-btn" onclick="closeExerciseMenu(); unlinkSuperset(${exIdx});">✕ Unlink superset</button>` : ''}
     <button class="action-menu-btn" style="color:var(--red);" onclick="closeExerciseMenu(); removeExercise(${exIdx});">🗑 Remove exercise</button>
   `;
