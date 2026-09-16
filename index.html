@@ -382,6 +382,12 @@
     width:30px; height:30px; border-radius:8px; font-size:13px;
   }
   .reorder-btn:disabled{opacity:0.3;}
+  .resume-row{cursor:pointer;}
+  .resume-row.current{border-color:var(--red);}
+  .resume-row .name{display:flex; align-items:center; gap:6px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .resume-row .check{color:var(--green); flex-shrink:0;}
+  .resume-row .current-tag{color:var(--red); font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; flex-shrink:0;}
+  .resume-row .resume-sets-count{font-size:11px; color:var(--grey); white-space:nowrap; margin-left:10px;}
 
   .chip-list{display:flex; flex-wrap:wrap; gap:8px;}
   .chip{
@@ -391,6 +397,43 @@
   .chip.selected{background:var(--red); border-color:var(--red);}
   .chip.selected-blue{background:var(--blue); border-color:var(--blue);}
   .chip.add-new{color:var(--red); border-style:dashed;}
+  .chip.selected-plate{background:var(--green); border-color:var(--green); color:var(--black); font-weight:700;}
+
+  /* Loaded bar visual */
+  .loaded-bar-summary{display:flex; align-items:baseline; justify-content:space-between; margin:4px 0 16px;}
+  .loaded-bar-summary .achieved{font-size:26px; font-weight:900;}
+  .loaded-bar-summary .achieved small{font-size:13px; color:var(--grey); font-weight:400;}
+  .loaded-bar-summary .diff{font-size:11px; color:var(--gold); text-align:right;}
+  .loaded-bar-visual{
+    display:flex; align-items:center; justify-content:flex-end;
+    height:150px; margin:6px 0 14px; overflow-x:auto; padding:0 2px;
+  }
+  .bar-shaft{
+    flex:1; min-width:24px; height:9px; border-radius:5px;
+    background:linear-gradient(180deg, #cfcfcf, #8a8a8a 45%, #5c5c5c);
+    box-shadow:inset 0 1px 1px rgba(255,255,255,0.5);
+  }
+  .bar-sleeve{
+    width:8px; height:18px; border-radius:3px; margin-left:1px;
+    background:linear-gradient(180deg, #b8b8b8, #6b6b6b);
+    flex-shrink:0;
+  }
+  .bar-plates{display:flex; align-items:center; flex-shrink:0;}
+  .bar-plate{
+    width:20px; border-radius:6px; margin-left:3px; flex-shrink:0;
+    display:flex; align-items:flex-end; justify-content:center;
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.4);
+  }
+  .bar-plate span{
+    display:block; width:100%; text-align:center; font-size:9px; font-weight:800;
+    color:rgba(0,0,0,0.55); padding-bottom:4px;
+  }
+  .bar-plate.light span{color:rgba(0,0,0,0.6);}
+  .bar-plate.dark span{color:rgba(255,255,255,0.8);}
+  .loaded-bar-breakdown{font-size:13px; color:var(--white); line-height:1.9;}
+  .loaded-bar-breakdown .row{display:flex; justify-content:space-between; border-bottom:1px solid var(--line); padding:4px 0;}
+  .loaded-bar-breakdown .row:last-child{border-bottom:none;}
+  .loaded-bar-breakdown .swatch{display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:7px; vertical-align:middle;}
 
   .draft-exercise-row{
     display:flex; justify-content:space-between; align-items:center;
@@ -606,10 +649,35 @@
   <div class="modal-card">
     <button class="modal-close" onclick="closeWorkoutMenu()">×</button>
     <div class="modal-title">Workout actions</div>
+    <button class="action-menu-btn" onclick="closeWorkoutMenu(); openResumeSummary();">▤ Routine Preview</button>
     <button class="action-menu-btn" onclick="closeWorkoutMenu(); openExercisePicker();">+ Add exercise</button>
     <button class="action-menu-btn" onclick="closeWorkoutMenu(); openSupersetPicker();">⇄ Link superset</button>
     <button class="action-menu-btn" onclick="closeWorkoutMenu(); openReorderExercises();">☰ Reorder exercises</button>
+    <button class="action-menu-btn" onclick="closeWorkoutMenu(); openLoadedBar();">🏋️ Loaded bar</button>
     <button class="action-menu-btn" id="updateRoutineBtn" onclick="closeWorkoutMenu(); updateRoutineFromWorkout();">💾 Update routine</button>
+  </div>
+</div>
+
+<!-- POPUP: Resume - overview of all exercises in the active workout -->
+<div class="modal-backdrop" id="resumeSummaryModal">
+  <div class="modal-card">
+    <button class="modal-close" onclick="closeResumeSummary()">×</button>
+    <div class="modal-title">Resume</div>
+    <div id="resumeSummaryList"></div>
+  </div>
+</div>
+
+<!-- POPUP: Loaded bar calculator -->
+<div class="modal-backdrop" id="loadedBarModal">
+  <div class="modal-card" style="max-width:340px;">
+    <button class="modal-close" onclick="closeLoadedBar()">×</button>
+    <div class="modal-title">Loaded bar</div>
+    <div class="field">
+      <label>Target weight (kg)</label>
+      <input type="number" id="loadedBarWeightInput" inputmode="decimal" step="0.5" min="0" placeholder="e.g. 140" oninput="renderLoadedBarResult()">
+    </div>
+    <div id="loadedBarResult"></div>
+    <small class="hint" id="loadedBarSettingsHint">Bar weight and available plates can be set in Settings → Barbell & plates.</small>
   </div>
 </div>
 
@@ -745,6 +813,20 @@
     </div>
 
     <div class="field" style="margin-top:34px; padding-top:18px; border-top:1px solid var(--line);">
+      <label>Barbell &amp; plates</label>
+      <small class="hint">Used by the "Loaded bar" tool during a workout to figure out which plates to load per side.</small>
+      <div style="margin-top:12px;">
+        <label style="font-size:12px; text-transform:none; letter-spacing:0; color:var(--grey);">Barbell weight (kg)</label>
+        <input type="number" id="barWeightInput" step="0.5" min="0" style="margin-top:6px;">
+      </div>
+      <div style="margin-top:14px;">
+        <label style="font-size:12px; text-transform:none; letter-spacing:0; color:var(--grey);">Plates available at my gym (per plate, kg)</label>
+        <div class="chip-list" id="plateChipList" style="margin-top:8px;"></div>
+      </div>
+      <button class="btn-secondary" style="width:100%; margin-top:12px;" onclick="saveBarSettings()">Save barbell &amp; plates</button>
+    </div>
+
+    <div class="field" style="margin-top:34px; padding-top:18px; border-top:1px solid var(--line);">
       <label>Export</label>
       <button class="btn-secondary" style="width:100%;" onclick="downloadBackup()">Download .json backup</button>
       <small class="hint">Saves all your data: routines, workouts, goals and exercise catalog.</small>
@@ -862,6 +944,27 @@
 /* ================= DATA LAYER ================= */
 const DB_KEY = 'sbd_tracker_v1';
 
+/* Plates a gym could plausibly have, in kg (per single plate). Colors follow
+   the common IPF/competition color-coding so the visual reads at a glance. */
+const PLATE_CATALOG = [
+  { kg:25,  color:'#e0261b', cls:'dark'  },
+  { kg:20,  color:'#3f8cae', cls:'dark'  },
+  { kg:15,  color:'#e0b02a', cls:'light' },
+  { kg:10,  color:'#3fae5c', cls:'dark'  },
+  { kg:5,   color:'#f5f5f0', cls:'light' },
+  { kg:2.5, color:'#2a2a2a', cls:'dark'  }
+];
+const PLATE_HEIGHT = { 25:150, 20:136, 15:122, 10:108, 5:94, 2.5:74 };
+
+function applyBarSettingsDefaults(dbObj){
+  if(typeof dbObj.settings.barWeight !== 'number' || dbObj.settings.barWeight<=0){
+    dbObj.settings.barWeight = 20;
+  }
+  if(!Array.isArray(dbObj.settings.availablePlates)){
+    dbObj.settings.availablePlates = PLATE_CATALOG.map(p=>p.kg); // default: assume the gym has them all
+  }
+}
+
 function loadDB(){
   const raw = localStorage.getItem(DB_KEY);
   if(raw){
@@ -870,6 +973,7 @@ function loadDB(){
       if(!parsed.settings) parsed.settings = { restSeconds: 180 };
       if(!parsed.settings.categories) parsed.settings.categories = [];
       if(!parsed.basicAssignments) parsed.basicAssignments = {};
+      applyBarSettingsDefaults(parsed);
       return parsed;
     } catch(e){ /* fallthrough to seed */ }
   }
@@ -943,6 +1047,7 @@ function seedData(){
         ]},
     ]
   };
+  applyBarSettingsDefaults(db);
   localStorage.setItem(DB_KEY, JSON.stringify(db));
   return db;
 }
@@ -1823,6 +1928,41 @@ function moveExercise(idx, dir){
   if(newIdx < 0 || newIdx >= arr.length) return;
   [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
   renderReorderList();
+  saveActiveSession();
+}
+function openResumeSummary(){
+  renderResumeSummaryList();
+  document.getElementById('resumeSummaryModal').classList.add('active');
+}
+function closeResumeSummary(){
+  document.getElementById('resumeSummaryModal').classList.remove('active');
+}
+function renderResumeSummaryList(){
+  const wrap = document.getElementById('resumeSummaryList');
+  wrap.innerHTML = '';
+  if(!liveSession || !liveSession.exercises.length){
+    wrap.innerHTML = '<div class="empty">No exercises yet.</div>';
+    return;
+  }
+  liveSession.exercises.forEach((ex, idx)=>{
+    const totalSets = ex.sets.length;
+    const doneSets = ex.sets.filter(set=> set.w != null && set.r != null && set.w > 0 && set.r > 0).length;
+    const isDone = totalSets > 0 && doneSets === totalSets;
+    const isCurrent = idx === liveSession.focusedExerciseIndex;
+    const row = document.createElement('div');
+    row.className = 'reorder-row resume-row' + (isCurrent ? ' current' : '');
+    row.onclick = ()=> jumpToExercise(idx);
+    row.innerHTML = `
+      <span class="name">${isDone ? '<span class="check">✓</span>' : ''}<span>${ex.name}</span>${isCurrent ? '<span class="current-tag">· current</span>' : ''}</span>
+      <span class="resume-sets-count">${doneSets}/${totalSets} sets</span>
+    `;
+    wrap.appendChild(row);
+  });
+}
+function jumpToExercise(idx){
+  liveSession.focusedExerciseIndex = idx;
+  closeResumeSummary();
+  renderLiveWorkout();
   saveActiveSession();
 }
 function renderLiveWorkout(){
@@ -3132,7 +3272,119 @@ async function deleteCategoryTimer(catId){
 function openSettings(){
   document.getElementById('restMinutesInput').value = db.settings.restSeconds/60;
   renderCategoryTimers();
+  document.getElementById('barWeightInput').value = db.settings.barWeight;
+  renderPlateSettings();
   document.getElementById('settingsOverlay').classList.add('active');
+}
+function renderPlateSettings(){
+  const wrap = document.getElementById('plateChipList');
+  wrap.innerHTML = '';
+  PLATE_CATALOG.forEach(p=>{
+    const selected = (db.settings.availablePlates||[]).includes(p.kg);
+    const chip = document.createElement('div');
+    chip.className = 'chip' + (selected ? ' selected-plate' : '');
+    chip.textContent = p.kg + ' kg';
+    chip.onclick = ()=> togglePlateAvailable(p.kg);
+    wrap.appendChild(chip);
+  });
+}
+function togglePlateAvailable(kg){
+  if(!Array.isArray(db.settings.availablePlates)) db.settings.availablePlates = [];
+  const pos = db.settings.availablePlates.indexOf(kg);
+  if(pos>-1) db.settings.availablePlates.splice(pos,1);
+  else db.settings.availablePlates.push(kg);
+  renderPlateSettings();
+}
+function saveBarSettings(){
+  const barWeight = parseFloat(document.getElementById('barWeightInput').value);
+  if(!barWeight || barWeight<=0){ toast('Enter a valid barbell weight'); return; }
+  db.settings.barWeight = barWeight;
+  if(!db.settings.availablePlates || !db.settings.availablePlates.length){
+    toast('Pick at least one plate before saving'); return;
+  }
+  saveDB();
+  toast('Barbell & plates saved');
+}
+
+/* ================= LOADED BAR CALCULATOR ================= */
+function openLoadedBar(){
+  const input = document.getElementById('loadedBarWeightInput');
+  input.value = '';
+  document.getElementById('loadedBarResult').innerHTML = '';
+  document.getElementById('loadedBarModal').classList.add('active');
+  setTimeout(()=> input.focus(), 50);
+}
+function closeLoadedBar(){ document.getElementById('loadedBarModal').classList.remove('active'); }
+
+/* Greedy plate calculation: uses the heaviest available plates first to fill
+   the weight needed on ONE side of the bar. Assumes unlimited quantity of
+   each plate (typical for a commercial gym). Returns per-side breakdown plus
+   any leftover weight that couldn't be matched exactly with what's available. */
+function computeLoadedBar(totalWeight){
+  const barWeight = db.settings.barWeight || 20;
+  const available = (db.settings.availablePlates||[]).slice().sort((a,b)=> b-a);
+  const perSideNeeded = (totalWeight - barWeight) / 2;
+  if(perSideNeeded <= 0 || !available.length){
+    return { barWeight, perSideNeeded, counts:[], leftover: Math.max(perSideNeeded,0), achievedPerSide:0, achievedTotal: barWeight };
+  }
+  let remaining = Math.round(perSideNeeded*100)/100;
+  const counts = [];
+  available.forEach(kg=>{
+    const n = Math.floor((remaining + 1e-6) / kg);
+    if(n>0){
+      counts.push({ kg, n });
+      remaining = Math.round((remaining - n*kg)*100)/100;
+    }
+  });
+  const leftover = remaining > 0.01 ? remaining : 0;
+  const achievedPerSide = Math.round((perSideNeeded - leftover)*100)/100;
+  const achievedTotal = Math.round((barWeight + achievedPerSide*2)*100)/100;
+  return { barWeight, perSideNeeded, counts, leftover, achievedPerSide, achievedTotal };
+}
+function renderLoadedBarResult(){
+  const val = parseFloat(document.getElementById('loadedBarWeightInput').value);
+  const resultEl = document.getElementById('loadedBarResult');
+  if(!val || val<=0){ resultEl.innerHTML = ''; return; }
+  const r = computeLoadedBar(val);
+  if(r.perSideNeeded <= 0){
+    resultEl.innerHTML = `<div class="loaded-bar-summary"><div class="achieved">${r.barWeight}<small> kg (just the bar)</small></div></div>
+      <small class="hint">${val}kg is at or below your ${r.barWeight}kg bar — nothing to load.</small>`;
+    return;
+  }
+  if(!r.counts.length && r.leftover>0){
+    resultEl.innerHTML = `<small class="hint">No plates selected yet. Add your gym's plates in Settings → Barbell & plates.</small>`;
+    return;
+  }
+  // Visual: heaviest plates nearest the sleeve, one side shown (the other side mirrors it)
+  const plateDivs = r.counts.map(c=>{
+    const meta = PLATE_CATALOG.find(p=>p.kg===c.kg);
+    const h = PLATE_HEIGHT[c.kg] || 90;
+    let out = '';
+    for(let i=0;i<c.n;i++){
+      out += `<div class="bar-plate ${meta.cls}" style="height:${h}px; background:${meta.color};"><span>${c.kg}</span></div>`;
+    }
+    return out;
+  }).join('');
+  const diffLine = r.leftover>0
+    ? `<div class="diff">${r.leftover}kg per side can't be matched with your plates — closest is ${r.achievedTotal}kg</div>`
+    : '';
+  const breakdownRows = r.counts.map(c=>{
+    const meta = PLATE_CATALOG.find(p=>p.kg===c.kg);
+    return `<div class="row"><span><span class="swatch" style="background:${meta.color};"></span>${c.kg} kg</span><span>× ${c.n} per side</span></div>`;
+  }).join('');
+  resultEl.innerHTML = `
+    <div class="loaded-bar-summary">
+      <div class="achieved">${r.achievedTotal}<small> kg total</small></div>
+      ${diffLine}
+    </div>
+    <div class="loaded-bar-visual">
+      <div class="bar-shaft"></div>
+      <div class="bar-sleeve"></div>
+      <div class="bar-plates">${plateDivs}</div>
+    </div>
+    <div class="loaded-bar-breakdown">${breakdownRows}</div>
+    <small class="hint" style="margin-top:10px;">Bar: ${r.barWeight}kg + ${r.achievedPerSide}kg per side. Load the same plates on the other side.</small>
+  `;
 }
 function saveRestSetting(){
   const minutes = parseFloat(document.getElementById('restMinutesInput').value);
@@ -3146,6 +3398,7 @@ async function resetAllData(){
   if(!await appConfirm('Last confirmation: this cannot be undone. Delete everything?', {title:'Are you sure?', confirmText:'Delete everything'})) return;
   localStorage.removeItem(DB_KEY);
   db = { settings:{restSeconds:180, categories:[]}, goals:{squat:0,bench:0,deadlift:0}, basicAssignments:{}, exerciseCatalog:[], routines:[], sessions:[] };
+  applyBarSettingsDefaults(db);
   saveDB();
   closeOverlay('settingsOverlay');
   renderAll();
@@ -3261,6 +3514,7 @@ async function restoreBackup(){
       if(!parsed.sessions || !parsed.routines){ toast('Invalid file'); return; }
       if(!parsed.settings) parsed.settings = { restSeconds: 180 };
       if(!parsed.settings.categories) parsed.settings.categories = [];
+      applyBarSettingsDefaults(parsed);
       db = parsed;
       saveDB();
       closeOverlay('settingsOverlay');
