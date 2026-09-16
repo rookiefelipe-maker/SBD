@@ -312,6 +312,20 @@
     .focus-complete h3{font-size:18px; margin-bottom:8px;}
     .focus-complete p{color:var(--grey); font-size:13px; line-height:1.45;}
 
+    .warmup-screen{
+      width:100%; max-width:420px; margin:14vh auto 0;
+      background:var(--card); border:1px solid var(--line); border-radius:16px;
+      padding:36px 24px; text-align:center;
+    }
+    .warmup-icon{
+      width:58px; height:58px; margin:0 auto 18px; border-radius:50%;
+      background:var(--red-dim); color:var(--red); font-size:24px;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .warmup-screen h2{font-size:21px; font-weight:800; letter-spacing:0.2px; margin-bottom:8px;}
+    .warmup-screen p{color:var(--grey); font-size:13px; line-height:1.5; margin-bottom:26px;}
+    .warmup-screen .btn-primary{margin-top:0;}
+
   .rest-fab-wrap{
     position:fixed; right:18px; bottom:150px; z-index:65;
     display:none; flex-direction:column; align-items:flex-end; gap:10px;
@@ -1778,7 +1792,8 @@ function startWorkout(routineId){
     routine: r.name,
     routineId: r.id,
     startedAt: Date.now(),
-    focusedExerciseIndex: 0,
+    warmupEndedAt: null,
+    focusedExerciseIndex: -1,
     exercises: norm.map(ex=> ({
       name: ex.name,
       sets: Array.from({length: Math.max(1, ex.sets||1)}, (_,i)=> ({ w:null, r:null, isTopSet: !!(ex.topSet && i===0) })),
@@ -1986,6 +2001,15 @@ function jumpToExercise(idx){
   renderLiveWorkout();
   saveActiveSession();
 }
+function startFirstExercise(){
+  if(!liveSession) return;
+  liveSession.focusedExerciseIndex = 0;
+  if(!liveSession.warmupEndedAt) liveSession.warmupEndedAt = Date.now();
+  saveActiveSession();
+  renderLiveWorkout();
+  updateWorkoutHeader();
+  resetWorkoutScrollUI();
+}
 function renderLiveWorkout(){
   const body = document.getElementById('liveWorkoutBody');
   body.innerHTML = '';
@@ -1993,6 +2017,16 @@ function renderLiveWorkout(){
   if(!liveSession.exercises.length){
     body.classList.remove('focus-layout');
     body.innerHTML = '<div class="empty">Add an exercise to get started.</div>';
+    return;
+  }
+  if(liveSession.focusedExerciseIndex === -1){
+    body.innerHTML = `
+      <div class="warmup-screen">
+        <div class="warmup-icon"><i class="fa-solid fa-fire-flame-curved"></i></div>
+        <h2>Stretching &amp; Warm-up</h2>
+        <p>Take a few minutes to loosen up and get ready before you start lifting.</p>
+        <button class="btn-primary" onclick="startFirstExercise()">First exercise →</button>
+      </div>`;
     return;
   }
   const totalExercises = liveSession.exercises.length;
@@ -2401,12 +2435,22 @@ async function finishWorkout(){
 
   const finishedAt = Date.now();
   const durationMin = Math.max(1, Math.round((finishedAt-liveSession.startedAt)/60000));
+  // If the session went through the Stretching & Warm-up screen, split the
+  // total time into warm-up vs. actual training; freestyle workouts (which
+  // skip that screen) simply won't have this breakdown.
+  let warmupDurationMin = null, trainingDurationMin = null;
+  if(liveSession.warmupEndedAt){
+    warmupDurationMin = Math.max(0, Math.round((liveSession.warmupEndedAt - liveSession.startedAt)/60000));
+    trainingDurationMin = Math.max(0, Math.round((finishedAt - liveSession.warmupEndedAt)/60000));
+  }
   const newSession = {
     id: uid('s'),
     date: todayStr(),
     routine: liveSession.routine,
     routineId: liveSession.routineId || null,
     durationMin,
+    warmupDurationMin,
+    trainingDurationMin,
     startTime: timeStr(liveSession.startedAt),
     endTime: timeStr(finishedAt),
     exercises: validExercises
@@ -2892,6 +2936,22 @@ function openSessionDetail(sessionId){
       <div class="card-label">Basics · estimated 1RM</div>
       ${basicsHtml}
     </div>` : '';
+  const timeBreakdownCard = (s.warmupDurationMin != null && s.trainingDurationMin != null) ? `
+    <div class="card">
+      <div class="card-label">Time breakdown</div>
+      <div class="week-sbd-row">
+        <span class="lift">Total</span>
+        <div class="figures"><div class="w">${s.durationMin} min</div></div>
+      </div>
+      <div class="week-sbd-row">
+        <span class="lift">Stretching &amp; Warm-up</span>
+        <div class="figures"><div class="w">${s.warmupDurationMin} min</div></div>
+      </div>
+      <div class="week-sbd-row">
+        <span class="lift">Training</span>
+        <div class="figures"><div class="w">${s.trainingDurationMin} min</div></div>
+      </div>
+    </div>` : '';
   const detailTimeFmt = (s.startTime && s.endTime) ? ` · ${s.startTime}–${s.endTime}` : '';
   body.innerHTML = `
     <div class="card">
@@ -2903,6 +2963,7 @@ function openSessionDetail(sessionId){
         <span><b>${Math.round(vol).toLocaleString('en-US')}</b> kg vol.</span>
       </div>
     </div>
+    ${timeBreakdownCard}
     ${basicsCard}
   `;
   s.exercises.forEach(ex=>{
