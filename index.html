@@ -253,7 +253,8 @@
   .superset-focus-banner .sub{font-size:11px; opacity:0.85; margin-top:2px;}
   .superset-focus-banner .btn-secondary{width:auto; white-space:nowrap; margin-top:0;}
   .superset-tag{
-    font-size:10px; color:var(--blue); text-transform:uppercase; letter-spacing:0.5px; font-weight:700; margin-bottom:4px;
+    display:inline-flex; align-items:center; background:var(--charcoal); border:1px solid var(--line); border-radius:20px; padding:4px 10px;
+    font-size:10px; color:var(--blue); text-transform:uppercase; letter-spacing:0.5px; font-weight:700; margin-bottom:6px; margin-right:6px;
   }
   .toggle-row{display:flex; align-items:center; justify-content:space-between; padding:9px 2px;}
   .toggle-row .toggle-label{font-size:13px; font-weight:700;}
@@ -264,12 +265,13 @@
   .switch.disabled{opacity:.35; cursor:not-allowed;}
 
   .progress-tag{
-    display:flex; align-items:center; gap:6px;
-    font-size:10px; color:var(--blue); text-transform:uppercase; letter-spacing:.5px; font-weight:700; margin-bottom:4px;
+    display:inline-flex; align-items:center; gap:6px; background:var(--charcoal); border:1px solid var(--line); border-radius:20px; padding:4px 10px;
+    font-size:10px; color:var(--blue); text-transform:uppercase; letter-spacing:.5px; font-weight:700; margin-bottom:6px; margin-right:6px;
   }
 
   .topset-tag{
-    font-size:10px; color:var(--red); text-transform:uppercase; letter-spacing:0.5px; font-weight:700; margin-bottom:4px;
+    display:inline-flex; align-items:center; background:var(--charcoal); border:1px solid var(--line); border-radius:20px; padding:4px 10px;
+    font-size:10px; color:var(--red); text-transform:uppercase; letter-spacing:0.5px; font-weight:700; margin-bottom:6px; margin-right:6px;
   }
   .ex-block-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
   .ex-block-top h3{font-size:15px; font-weight:700;}
@@ -281,25 +283,54 @@
   .swap-btn{background:none; border:none; color:var(--red); font-size:11px; text-transform:uppercase; letter-spacing:0.5px;}
   .link-btn{background:none; border:none; color:var(--blue); font-size:11px; text-transform:uppercase; letter-spacing:0.5px;}
   .edit-exercise-btn{background:none; border:1px solid var(--line); color:var(--grey); font-size:11px; text-transform:uppercase; letter-spacing:0.5px; padding:5px 8px; border-radius:6px;}
-  .set-row{display:flex; align-items:center; gap:8px; margin-bottom:8px;}
-  .set-row .idx{width:20px; font-size:12px; color:var(--grey); text-align:center;}
-  .set-row input{text-align:center; padding:10px 6px;}
-  .set-row .w-input{flex:1.4;}
-  .set-row .r-input{flex:1;}
-  .set-row .unit-lbl{font-size:11px; color:var(--grey); width:24px;}
-  .set-row .rm-set{background:none; border:none; color:var(--grey); font-size:16px; width:24px;}
-  .set-star{background:none; border:none; color:var(--grey); font-size:16px; width:22px;}
-  .set-star.active{color:var(--red);}
-  .set-row.is-topset{background:var(--red-dim); border-radius:8px; padding:4px 2px; margin-left:-2px; margin-right:-2px;}
+
+  /* Set table: # | reps stepper | weight stepper | done circle */
+  .set-table-header{display:grid; grid-template-columns:34px 1fr 1fr 34px; gap:8px; padding:0 2px; margin-bottom:6px;}
+  .set-table-header span{font-size:10px; color:var(--grey); text-transform:uppercase; letter-spacing:0.8px; text-align:center;}
+  .set-table-header span:first-child{text-align:left;}
+
+  .set-row{display:grid; grid-template-columns:34px 1fr 1fr 34px; align-items:center; gap:8px; margin-bottom:10px;}
+  .set-row.is-topset{background:var(--red-dim); border-radius:10px; padding:6px 2px; margin-left:-2px; margin-right:-2px;}
   .set-row.is-topset.progression-alert{ animation: topset-blink 1.1s ease-in-out infinite; }
+  .set-row.is-warmup{opacity:0.55;}
   @keyframes topset-blink{
     0%, 100% { background:var(--red-dim); }
     50% { background:var(--gold); }
   }
+  .set-idx-cell{display:flex; flex-direction:column; align-items:center; gap:2px; line-height:1;}
+  .set-idx-cell .idx{font-size:13px; font-weight:800; color:var(--white);}
+  .set-idx-cell .idx.warmup-lbl{color:var(--gold); font-size:11px;}
+  .set-star{background:none; border:none; color:var(--grey); font-size:12px; padding:0;}
+  .set-star.active{color:var(--red);}
+  .rm-set{background:none; border:none; color:var(--grey); font-size:9px; padding:0; text-transform:uppercase; letter-spacing:0.5px;}
+
+  .stepper{display:flex; align-items:center; justify-content:space-between; background:var(--charcoal); border:1px solid var(--line); border-radius:10px; padding:4px;}
+  .stepper button{width:28px; height:28px; border-radius:7px; background:var(--line); color:var(--white); border:none; font-size:16px; font-weight:700; flex-shrink:0;}
+  .stepper button:active{background:var(--red-dim);}
+  .stepper .stepper-val{flex:1; text-align:center; font-weight:800; font-size:15px;}
+
+  .set-check{width:28px; height:28px; border-radius:50%; border:2px solid var(--line); background:none; justify-self:center; color:transparent; font-size:13px; font-weight:800;}
+  .set-check.done{background:var(--red); border-color:var(--red); color:var(--white);}
+
+  .set-actions-row{display:flex; gap:10px; margin-top:2px;}
+  .set-actions-row .add-set-btn, .set-actions-row .warmup-btn{flex:1; margin-top:0;}
   .add-set-btn{
-    width:100%; background:none; border:1px dashed var(--line); border-radius:8px;
-    color:var(--grey); padding:9px; font-size:12px; margin-top:2px; text-transform:uppercase; letter-spacing:0.5px;
+    background:none; border:1px dashed var(--line); border-radius:8px;
+    color:var(--grey); padding:9px; font-size:11px; margin-top:2px; text-transform:uppercase; letter-spacing:0.5px;
   }
+  .warmup-btn{
+    background:none; border:1px dashed var(--line); border-radius:8px;
+    color:var(--gold); padding:9px; font-size:11px; margin-top:2px; text-transform:uppercase; letter-spacing:0.5px;
+  }
+
+  .workout-nav-row{display:flex; align-items:center; gap:12px;}
+  .nav-circle-btn{width:46px; height:46px; border-radius:50%; background:var(--charcoal); border:1px solid var(--line); color:var(--white); font-size:20px; flex-shrink:0;}
+  .nav-circle-btn:disabled{opacity:0.25;}
+  .set-done-btn{flex:1; margin-top:0; border-radius:999px;}
+  .workout-footer-links{display:flex; justify-content:center; align-items:center; gap:10px; margin-top:10px;}
+  .footer-link{background:none; border:none; color:var(--grey); font-size:11px; text-transform:uppercase; letter-spacing:0.7px; padding:4px;}
+  .footer-link.danger{color:var(--red);}
+  .footer-link-sep{color:var(--line); font-size:11px;}
   .rm-exercise{background:none; border:none; color:var(--grey); font-size:11px; text-transform:uppercase; letter-spacing:0.5px;}
   .timer-btn{background:none; border:1px solid var(--red-dim); color:var(--red); font-size:11px; text-transform:uppercase; letter-spacing:0.5px; padding:5px 8px; border-radius:6px;}
     .focus-progress{display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; color:var(--grey); font-size:11px; text-transform:uppercase; letter-spacing:1px;}
@@ -654,8 +685,18 @@
   <button class="workout-menu-btn" id="workoutMenuBtn" onclick="openWorkoutMenu()" title="Workout actions">☰</button>
   <div class="overlay-body" id="liveWorkoutBody"></div>
   <div class="overlay-footer" id="liveWorkoutFooter">
-    <button class="btn-danger" style="width:100%; margin-bottom:6px;" onclick="discardWorkout()">Discard workout</button>
-    <button class="btn-primary" onclick="finishWorkout()">Finish workout</button>
+    <div class="workout-nav-row">
+      <button class="nav-circle-btn" id="prevExerciseBtn" onclick="focusPrevExercise()" aria-label="Previous exercise">‹</button>
+      <button class="btn-primary set-done-btn" id="setDoneBtn" onclick="markCurrentSetDone()">Set done</button>
+      <button class="nav-circle-btn" id="nextExerciseBtn" onclick="focusNextExercise()" aria-label="Next exercise">›</button>
+    </div>
+    <div class="workout-footer-links">
+      <button class="footer-link danger" onclick="dropCurrentExercise()">Drop exercise</button>
+      <span class="footer-link-sep">|</span>
+      <button class="footer-link" onclick="finishWorkout()">Finish session</button>
+      <span class="footer-link-sep">|</span>
+      <button class="footer-link danger" onclick="discardWorkout()">Cancel session</button>
+    </div>
   </div>
 </div>
 
@@ -688,6 +729,7 @@
 <button class="action-menu-btn" id="updateRoutineBtn" onclick="closeWorkoutMenu(); updateRoutineFromWorkout();">
   <i class="fa-regular fa-floppy-disk" style="color: rgb(230, 12, 12);"></i> Update routine
 </button>
+
   </div>
 </div>
 
@@ -1921,6 +1963,7 @@ function openExerciseMenu(exIdx){
   document.getElementById('exerciseMenuTitle').textContent = ex.name;
   const actions = document.getElementById('exerciseMenuActions');
   actions.innerHTML = `
+    <button class="action-menu-btn" onclick="closeExerciseMenu(); openExercisePicker(${exIdx}, 'live');"><i class="fa-solid fa-arrow-right-arrow-left"></i> Change exercise</button>
     <button class="action-menu-btn" onclick="closeWorkoutMenu(); openSupersetPicker();"><i class="fa-solid fa-link"></i> Link superset</button>
     ${ex.supersetGroup ? `<button class="action-menu-btn" onclick="closeExerciseMenu(); unlinkSuperset(${exIdx});">✕ Unlink superset</button>` : ''}
     <button class="action-menu-btn" style="color:var(--red);" onclick="closeExerciseMenu(); removeExercise(${exIdx});">🗑 Remove exercise</button>
@@ -2017,6 +2060,7 @@ function renderLiveWorkout(){
   if(!liveSession.exercises.length){
     body.classList.remove('focus-layout');
     body.innerHTML = '<div class="empty">Add an exercise to get started.</div>';
+    updateFooterNav();
     return;
   }
   if(liveSession.focusedExerciseIndex === -1){
@@ -2027,6 +2071,7 @@ function renderLiveWorkout(){
         <p>Take a few minutes to loosen up and get ready before you start lifting.</p>
         <button class="btn-primary" onclick="startFirstExercise()">First exercise →</button>
       </div>`;
+    updateFooterNav();
     return;
   }
   const totalExercises = liveSession.exercises.length;
@@ -2038,6 +2083,7 @@ function renderLiveWorkout(){
         <h3>Workout complete</h3>
         <p>All exercises have been filled in. Review your sets, then finish the workout below.</p>
       </div>`;
+    updateFooterNav();
     return;
   }
   const stage = document.createElement('div');
@@ -2108,7 +2154,10 @@ function renderLiveWorkout(){
         </div>
       </div>
       <div id="sets-${exIdx}"></div>
-      <button class="add-set-btn" onclick="addSet(${exIdx})">+ Set</button>
+      <div class="set-actions-row">
+        <button class="add-set-btn" onclick="addSet(${exIdx})">+ Add set</button>
+        <button class="warmup-btn" onclick="addWarmupSet(${exIdx})">Warm-up</button>
+      </div>
     `;
     stage.appendChild(block);
     renderSets(exIdx);
@@ -2120,6 +2169,7 @@ function renderLiveWorkout(){
     ? `Next exercise<strong>${nextExercise.name}</strong>`
     : '<strong>Last exercise</strong>Finish the workout when you are ready.';
   body.appendChild(nextPrompt);
+  updateFooterNav();
 }
 function renderSets(exIdx){
   const wrap = document.getElementById('sets-'+exIdx);
@@ -2129,6 +2179,13 @@ function renderSets(exIdx){
   // hit the top set two calendar weeks running, the top-set row blinks red
   // instead of sitting on the usual fixed red-dim background.
   const progAlert = ex.isProgressionExercise ? progressionAlertFor(ex.name, todayStr()) : null;
+
+  const header = document.createElement('div');
+  header.className = 'set-table-header';
+  header.innerHTML = `<span>#</span><span>Reps</span><span>Weight (kg)</span><span></span>`;
+  wrap.appendChild(header);
+
+  let workingNum = 0;
   ex.sets.forEach((set, setIdx)=>{
     const row = document.createElement('div');
     // Once the lifter actually logs a heavier weight AND at least 1 rep for
@@ -2137,19 +2194,30 @@ function renderSets(exIdx){
     // accidental keystroke and not a completed set.
     const alreadyProgressed = progAlert && set.w!=null && set.w > progAlert.weight && set.r!=null && set.r > 0;
     const blink = set.isTopSet && progAlert && !alreadyProgressed ? ' progression-alert' : '';
-    row.className = 'set-row' + (set.isTopSet ? ' is-topset' : '') + blink;
-    const starBtn = ex.isTopSetExercise
-      ? `<button class="set-star ${set.isTopSet?'active':''}" onclick="toggleSetTopSet(${exIdx}, ${setIdx})">${set.isTopSet ? '★' : '☆'}</button>`
+    row.className = 'set-row' + (set.isTopSet ? ' is-topset' : '') + (set.isWarmup ? ' is-warmup' : '') + blink;
+    if(!set.isWarmup) workingNum++;
+    const label = set.isWarmup ? 'W' : workingNum;
+    const starBtn = (!set.isWarmup && ex.isTopSetExercise)
+      ? `<button type="button" class="set-star ${set.isTopSet?'active':''}" onclick="toggleSetTopSet(${exIdx}, ${setIdx})">${set.isTopSet ? '★' : '☆'}</button>`
       : '';
+    const isDone = !!set.done;
     row.innerHTML = `
-      <span class="idx">${setIdx+1}</span>
-      ${starBtn}
-      <input class="w-input" type="number" inputmode="decimal" placeholder="kg" step="0.5" value="${set.w ?? ''}"
-        onchange="updateSet(${exIdx}, ${setIdx}, 'w', this.value)">
-      <span class="unit-lbl">kg</span>
-      <input class="r-input" type="number" inputmode="numeric" placeholder="reps" value="${set.r ?? ''}"
-        onchange="updateSet(${exIdx}, ${setIdx}, 'r', this.value)">
-      <button class="rm-set" onclick="removeSet(${exIdx}, ${setIdx})">×</button>
+      <div class="set-idx-cell">
+        ${starBtn}
+        <span class="idx${set.isWarmup?' warmup-lbl':''}">${label}</span>
+        <button type="button" class="rm-set" onclick="removeSet(${exIdx}, ${setIdx})">×</button>
+      </div>
+      <div class="stepper">
+        <button type="button" onclick="stepSet(${exIdx}, ${setIdx}, 'r', -1)">–</button>
+        <span class="stepper-val">${set.r ?? 0}</span>
+        <button type="button" onclick="stepSet(${exIdx}, ${setIdx}, 'r', 1)">+</button>
+      </div>
+      <div class="stepper">
+        <button type="button" onclick="stepSet(${exIdx}, ${setIdx}, 'w', -2.5)">–</button>
+        <span class="stepper-val">${set.w ?? 0}</span>
+        <button type="button" onclick="stepSet(${exIdx}, ${setIdx}, 'w', 2.5)">+</button>
+      </div>
+      <button type="button" class="set-check ${isDone?'done':''}" onclick="toggleSetDone(${exIdx}, ${setIdx})">${isDone?'✓':''}</button>
     `;
     wrap.appendChild(row);
   });
@@ -2164,45 +2232,130 @@ function toggleSetTopSet(exIdx, setIdx){
 }
 function addSet(exIdx){
   const sets = liveSession.exercises[exIdx].sets;
-  const prevSet = sets[sets.length-1];
-  sets.push({ w: prevSet ? prevSet.w : null, r: prevSet ? prevSet.r : null, isTopSet:false });
+  const prevWorkingSet = [...sets].reverse().find(s=> !s.isWarmup) || sets[sets.length-1];
+  sets.push({ w: prevWorkingSet ? prevWorkingSet.w : null, r: prevWorkingSet ? prevWorkingSet.r : null, isTopSet:false, done:false });
+  renderSets(exIdx);
+  saveActiveSession();
+}
+function addWarmupSet(exIdx){
+  const sets = liveSession.exercises[exIdx].sets;
+  const firstWorkingIdx = sets.findIndex(s=> !s.isWarmup);
+  const insertAt = firstWorkingIdx === -1 ? sets.length : firstWorkingIdx;
+  sets.splice(insertAt, 0, { w:null, r:null, isTopSet:false, done:false, isWarmup:true });
   renderSets(exIdx);
   saveActiveSession();
 }
 function removeSet(exIdx, setIdx){
   liveSession.exercises[exIdx].sets.splice(setIdx,1);
-  if(!liveSession.exercises[exIdx].sets.length) liveSession.exercises[exIdx].sets.push({w:null,r:null,isTopSet:false});
+  if(!liveSession.exercises[exIdx].sets.length) liveSession.exercises[exIdx].sets.push({w:null,r:null,isTopSet:false,done:false});
   renderSets(exIdx);
   saveActiveSession();
 }
-function updateSet(exIdx, setIdx, field, value){
-  const v = value === '' ? null : parseFloat(value);
-  liveSession.exercises[exIdx].sets[setIdx][field] = v;
-  saveActiveSession();
-
-  // Re-render this exercise's rows so the topset blink turns off immediately
-  // once the new (heavier) weight has been logged, instead of only updating
-  // after leaving and re-entering the workout.
-  renderSets(exIdx);
-
+function stepSet(exIdx, setIdx, field, delta){
   const set = liveSession.exercises[exIdx].sets[setIdx];
-  if(field === 'r' && set.w != null && set.r != null && set.w > 0 && set.r > 0){
-    handleSetCompleted(exIdx);
-  }
+  let next = (set[field] ?? 0) + delta;
+  if(next < 0) next = 0;
+  if(field === 'w') next = Math.round(next*2)/2;
+  set[field] = next;
+  saveActiveSession();
+  renderSets(exIdx);
+}
+function toggleSetDone(exIdx, setIdx){
+  const set = liveSession.exercises[exIdx].sets[setIdx];
+  set.done = !set.done;
+  saveActiveSession();
+  renderSets(exIdx);
+  if(set.done) handleSetCompleted(exIdx);
 }
 function handleSetCompleted(exIdx){
   const ex = liveSession.exercises[exIdx];
   // Give the user 5 seconds to start the rest timer manually. If they don't,
   // it starts itself and lets them know with a notification + alert sound.
   scheduleAutoRest(restSecondsForExercise(ex.name));
-  const exDone = ex.sets.every(set=> set.w != null && set.r != null && set.w > 0 && set.r > 0);
+  const exDone = ex.sets.every(set=> set.done);
   if(!exDone) return;
   if(focusedSupersetGroup && ex.supersetGroup === focusedSupersetGroup){
     const partner = liveSession.exercises.find(o=> o!==ex && o.supersetGroup===focusedSupersetGroup);
-    const partnerDone = !partner || partner.sets.every(set=> set.w != null && set.r != null && set.w > 0 && set.r > 0);
+    const partnerDone = !partner || partner.sets.every(set=> set.done);
     if(!partnerDone) return; // wait for the other linked exercise to finish too
   }
   advanceFocusedExercise(exIdx);
+}
+/* Footer navigation: prev/next exercise arrows + big "Set done" pill,
+   matching how far along the focused exercise (or warm-up/completion
+   screen) currently is. */
+function updateFooterNav(){
+  const prevBtn = document.getElementById('prevExerciseBtn');
+  const nextBtn = document.getElementById('nextExerciseBtn');
+  const doneBtn = document.getElementById('setDoneBtn');
+  if(!prevBtn || !nextBtn || !doneBtn || !liveSession) return;
+  const idx = liveSession.focusedExerciseIndex ?? 0;
+  const total = liveSession.exercises.length;
+  prevBtn.disabled = idx <= -1 || !total;
+  nextBtn.disabled = idx >= total || !total;
+  if(!total){
+    doneBtn.textContent = 'Add an exercise';
+    doneBtn.disabled = true;
+  } else if(idx >= total){
+    doneBtn.textContent = 'Workout complete';
+    doneBtn.disabled = true;
+  } else if(idx === -1){
+    doneBtn.textContent = 'Start lifting';
+    doneBtn.disabled = false;
+  } else {
+    doneBtn.textContent = 'Set done';
+    doneBtn.disabled = false;
+  }
+}
+function focusPrevExercise(){
+  if(!liveSession) return;
+  if(liveSession.focusedExerciseIndex > -1) liveSession.focusedExerciseIndex--;
+  saveActiveSession();
+  renderLiveWorkout();
+  updateWorkoutHeader();
+  resetWorkoutScrollUI();
+}
+function focusNextExercise(){
+  if(!liveSession) return;
+  if(liveSession.focusedExerciseIndex === -1){ startFirstExercise(); return; }
+  const total = liveSession.exercises.length;
+  if(liveSession.focusedExerciseIndex < total) liveSession.focusedExerciseIndex++;
+  saveActiveSession();
+  renderLiveWorkout();
+  updateWorkoutHeader();
+  resetWorkoutScrollUI();
+}
+/* "Set done" pill: marks the next not-yet-done set (of the focused exercise,
+   or both linked exercises when in a superset focus) as done, same as
+   tapping its circle — so the user can log a workout without touching the
+   set rows directly once reps/weight are dialed in via the steppers. */
+function markCurrentSetDone(){
+  if(!liveSession) return;
+  if(liveSession.focusedExerciseIndex === -1){ startFirstExercise(); return; }
+  if(liveSession.focusedExerciseIndex >= liveSession.exercises.length) return;
+  const visibleIdx = focusedSupersetGroup
+    ? liveSession.exercises.reduce((arr,o,i)=>{ if(o.supersetGroup===focusedSupersetGroup) arr.push(i); return arr; },[])
+    : [liveSession.focusedExerciseIndex];
+  for(const exIdx of visibleIdx){
+    const ex = liveSession.exercises[exIdx];
+    const pendingSet = ex.sets.find(s=> !s.done);
+    if(pendingSet){
+      pendingSet.done = true;
+      saveActiveSession();
+      renderSets(exIdx);
+      handleSetCompleted(exIdx);
+      return;
+    }
+  }
+  focusNextExercise();
+}
+async function dropCurrentExercise(){
+  if(!liveSession) return;
+  const idx = liveSession.focusedExerciseIndex;
+  if(idx == null || idx < 0 || idx >= liveSession.exercises.length){ toast('No exercise to drop'); return; }
+  const ex = liveSession.exercises[idx];
+  if(!await appConfirm(`Remove "${ex.name}" from this workout?`, {title:'Drop exercise', confirmText:'Drop'})) return;
+  removeExercise(idx);
 }
 function advanceFocusedExercise(exIdx){
   if(!liveSession) return;
