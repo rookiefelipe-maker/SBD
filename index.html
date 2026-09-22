@@ -236,6 +236,8 @@
     transition:transform .25s ease, opacity .2s ease;
   }
   .overlay-footer.footer-hidden{ transform:translateY(120%); opacity:0; pointer-events:none; }
+  #liveWorkoutFooter{ padding-bottom:calc(28px + env(safe-area-inset-bottom)); }
+  #liveWorkoutFooter .workout-footer-links{ margin-top:16px; }
   .close-btn{background:none; border:none; color:var(--grey); font-size:22px; padding:4px 8px;}
 
   .field{margin-bottom:14px;}
@@ -308,7 +310,7 @@
   .stepper button{width:28px; height:28px; border-radius:7px; background:var(--line); color:var(--white); border:none; font-size:16px; font-weight:700; flex-shrink:0;}
   .stepper button:active{background:var(--red-dim);}
   .stepper .stepper-val{flex:1; text-align:center; font-weight:800; font-size:15px;}
-  .stepper-input{background:transparent; border:none; color:var(--white); font-family:inherit; padding:0; -moz-appearance:textfield;}
+  .stepper-input{background:transparent; border:none; color:var(--white); font-family:inherit; padding:0; -moz-appearance:textfield; width:100%; min-width:0; font-size:16px;}
   .stepper-input::-webkit-outer-spin-button, .stepper-input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
   .stepper-input:focus{outline:none;}
 
