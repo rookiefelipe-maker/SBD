@@ -308,6 +308,9 @@
   .stepper button{width:28px; height:28px; border-radius:7px; background:var(--line); color:var(--white); border:none; font-size:16px; font-weight:700; flex-shrink:0;}
   .stepper button:active{background:var(--red-dim);}
   .stepper .stepper-val{flex:1; text-align:center; font-weight:800; font-size:15px;}
+  .stepper-input{background:transparent; border:none; color:var(--white); font-family:inherit; padding:0; -moz-appearance:textfield;}
+  .stepper-input::-webkit-outer-spin-button, .stepper-input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
+  .stepper-input:focus{outline:none;}
 
   .set-check{width:28px; height:28px; border-radius:50%; border:2px solid var(--line); background:none; justify-self:center; color:transparent; font-size:13px; font-weight:800;}
   .set-check.done{background:var(--red); border-color:var(--red); color:var(--white);}
@@ -2209,12 +2212,12 @@ function renderSets(exIdx){
       </div>
       <div class="stepper">
         <button type="button" onclick="stepSet(${exIdx}, ${setIdx}, 'r', -1)">–</button>
-        <span class="stepper-val">${set.r ?? 0}</span>
+        <input type="number" inputmode="numeric" class="stepper-val stepper-input" value="${set.r ?? 0}" onchange="typeSet(${exIdx}, ${setIdx}, 'r', this.value)" onclick="this.select()">
         <button type="button" onclick="stepSet(${exIdx}, ${setIdx}, 'r', 1)">+</button>
       </div>
       <div class="stepper">
         <button type="button" onclick="stepSet(${exIdx}, ${setIdx}, 'w', -2.5)">–</button>
-        <span class="stepper-val">${set.w ?? 0}</span>
+        <input type="number" inputmode="decimal" step="0.5" class="stepper-val stepper-input" value="${set.w ?? 0}" onchange="typeSet(${exIdx}, ${setIdx}, 'w', this.value)" onclick="this.select()">
         <button type="button" onclick="stepSet(${exIdx}, ${setIdx}, 'w', 2.5)">+</button>
       </div>
       <button type="button" class="set-check ${isDone?'done':''}" onclick="toggleSetDone(${exIdx}, ${setIdx})">${isDone?'✓':''}</button>
@@ -2250,6 +2253,15 @@ function removeSet(exIdx, setIdx){
   if(!liveSession.exercises[exIdx].sets.length) liveSession.exercises[exIdx].sets.push({w:null,r:null,isTopSet:false,done:false});
   renderSets(exIdx);
   saveActiveSession();
+}
+function typeSet(exIdx, setIdx, field, rawValue){
+  const set = liveSession.exercises[exIdx].sets[setIdx];
+  let next = parseFloat(rawValue);
+  if(isNaN(next) || next < 0) next = 0;
+  if(field === 'w') next = Math.round(next*2)/2;
+  set[field] = next;
+  saveActiveSession();
+  renderSets(exIdx);
 }
 function stepSet(exIdx, setIdx, field, delta){
   const set = liveSession.exercises[exIdx].sets[setIdx];
