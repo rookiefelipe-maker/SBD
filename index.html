@@ -285,6 +285,16 @@
   .swap-btn{background:none; border:none; color:var(--red); font-size:11px; text-transform:uppercase; letter-spacing:0.5px;}
   .link-btn{background:none; border:none; color:var(--blue); font-size:11px; text-transform:uppercase; letter-spacing:0.5px;}
   .edit-exercise-btn{background:none; border:1px solid var(--line); color:var(--grey); font-size:11px; text-transform:uppercase; letter-spacing:0.5px; padding:5px 8px; border-radius:6px;}
+  .ex-secondary-actions-row{display:flex; gap:8px; margin-top:8px;}
+  .ex-secondary-actions-row button{flex:1; margin-top:0;}
+  .change-ex-btn, .link-superset-btn, .remove-ex-btn{
+    background:none; border:1px dashed var(--line); border-radius:8px;
+    padding:9px 6px; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;
+    display:flex; align-items:center; justify-content:center; gap:5px;
+  }
+  .change-ex-btn{color:var(--grey);}
+  .link-superset-btn{color:var(--blue);}
+  .remove-ex-btn{color:var(--red);}
 
   /* Set table: # | reps stepper | weight stepper | done circle */
   .set-table-header{display:grid; grid-template-columns:34px 1fr 1fr 34px; gap:8px; padding:0 2px; margin-bottom:6px;}
@@ -331,13 +341,20 @@
   .workout-nav-row{display:flex; align-items:center; gap:12px;}
   .nav-circle-btn{width:46px; height:46px; border-radius:50%; background:var(--charcoal); border:1px solid var(--line); color:var(--white); font-size:20px; flex-shrink:0;}
   .nav-circle-btn:disabled{opacity:0.25;}
-  .set-done-btn{flex:1; margin-top:0; border-radius:999px;}
+  .set-done-btn{
+    flex:1; margin-top:0;
+    background:none; border:1px solid var(--red-dim); color:var(--red);
+    font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:0.5px;
+    border-radius:10px; padding:12px;
+  }
+  .set-done-btn:disabled{background:none; border-color:var(--line); color:var(--grey);}
   .workout-footer-links{display:flex; justify-content:center; align-items:center; gap:10px; margin-top:10px;}
   .footer-link{background:none; border:none; color:var(--grey); font-size:11px; text-transform:uppercase; letter-spacing:0.7px; padding:4px;}
   .footer-link.danger{color:var(--red);}
+  .footer-link.success{color:var(--green); font-weight:800;}
   .footer-link-sep{color:var(--line); font-size:11px;}
   .rm-exercise{background:none; border:none; color:var(--grey); font-size:11px; text-transform:uppercase; letter-spacing:0.5px;}
-  .timer-btn{background:none; border:1px solid var(--red-dim); color:var(--red); font-size:11px; text-transform:uppercase; letter-spacing:0.5px; padding:5px 8px; border-radius:6px;}
+  .timer-btn{background:none; border:1px solid var(--red-dim); color:var(--red); font-size:11px; text-transform:uppercase; letter-spacing:0.5px; padding:8px 20px; border-radius:6px; min-width:96px;}
     .focus-progress{display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; color:var(--grey); font-size:11px; text-transform:uppercase; letter-spacing:1px;}
     .focus-progress strong{color:var(--white); font-size:13px;}
     #liveWorkoutBody.focus-layout{display:flex; flex-direction:column; align-items:center;}
@@ -698,7 +715,7 @@
     <div class="workout-footer-links">
       <button class="footer-link danger" onclick="dropCurrentExercise()">Drop exercise</button>
       <span class="footer-link-sep">|</span>
-      <button class="footer-link" onclick="finishWorkout()">Finish session</button>
+      <button class="footer-link success" onclick="finishWorkout()">Finish session</button>
       <span class="footer-link-sep">|</span>
       <button class="footer-link danger" onclick="discardWorkout()">Cancel session</button>
     </div>
@@ -756,6 +773,10 @@
       <label>Target weight (kg)</label>
       <input type="number" id="loadedBarWeightInput" inputmode="decimal" step="0.5" min="0" placeholder="e.g. 140" oninput="renderLoadedBarResult()">
     </div>
+    <div class="toggle-row">
+      <span class="toggle-label">Bar</span>
+      <div class="switch on" id="loadedBarIncludeToggle" onclick="toggleLoadedBarIncludeBar()"><div class="knob"></div></div>
+    </div>
     <div id="loadedBarResult"></div>
     <small class="hint" id="loadedBarSettingsHint">Bar weight and available plates can be set in Settings → Barbell & plates.</small>
   </div>
@@ -780,15 +801,6 @@
       <div class="chip-list" id="categoryExercisePickList" style="margin-top:10px;"></div>
     </div>
     <button class="btn-primary" onclick="saveCategoryTimer()">Save timer group</button>
-  </div>
-</div>
-
-<!-- POPUP: Per-exercise edit menu (Substitute / Unlink / Remove) -->
-<div class="modal-backdrop" id="exerciseMenuModal">
-  <div class="modal-card">
-    <button class="modal-close" onclick="closeExerciseMenu()">×</button>
-    <div class="modal-title" id="exerciseMenuTitle">Exercise</div>
-    <div id="exerciseMenuActions"></div>
   </div>
 </div>
 
@@ -1962,21 +1974,6 @@ function openWorkoutMenu(){
   document.getElementById('workoutMenuModal').classList.add('active');
 }
 function closeWorkoutMenu(){ document.getElementById('workoutMenuModal').classList.remove('active'); }
-function openExerciseMenu(exIdx){
-  const ex = liveSession.exercises[exIdx];
-  if(!ex) return;
-  document.getElementById('exerciseMenuTitle').textContent = ex.name;
-  const actions = document.getElementById('exerciseMenuActions');
-  actions.innerHTML = `
-    <button class="action-menu-btn" onclick="closeExerciseMenu(); openExercisePicker(${exIdx}, 'live');"><i class="fa-solid fa-arrow-right-arrow-left"></i> Change exercise</button>
-    <button class="action-menu-btn" onclick="closeWorkoutMenu(); openSupersetPicker();"><i class="fa-solid fa-link"></i> Link superset</button>
-    ${ex.supersetGroup ? `<button class="action-menu-btn" onclick="closeExerciseMenu(); unlinkSuperset(${exIdx});">✕ Unlink superset</button>` : ''}
-    <button class="action-menu-btn" style="color:var(--red);" onclick="closeExerciseMenu(); removeExercise(${exIdx});">🗑 Remove exercise</button>
-  `;
-  document.getElementById('exerciseMenuModal').classList.add('active');
-}
-function closeExerciseMenu(){ document.getElementById('exerciseMenuModal').classList.remove('active'); }
-
 function openReorderExercises(){
   renderReorderList();
   document.getElementById('reorderModal').classList.add('active');
@@ -2155,13 +2152,19 @@ function renderLiveWorkout(){
         </div>
         <div class="ex-actions">
           <button class="timer-btn" onclick="startManualRest(${exIdx})"><i class="fa-solid fa-stopwatch-20"></i> REST</button>
-          <button class="edit-exercise-btn" onclick="openExerciseMenu(${exIdx})"><i class="fa-solid fa-pencil"></i> Edit Exercise</button>
         </div>
       </div>
       <div id="sets-${exIdx}"></div>
       <div class="set-actions-row">
         <button class="add-set-btn" onclick="addSet(${exIdx})">+ Add set</button>
         <button class="warmup-btn" onclick="addWarmupSet(${exIdx})">Warm-up</button>
+      </div>
+      <div class="ex-secondary-actions-row">
+        <button class="change-ex-btn" onclick="openExercisePicker(${exIdx}, 'live')"><i class="fa-solid fa-arrow-right-arrow-left"></i> Change Exercise</button>
+        ${ex.supersetGroup
+          ? `<button class="link-superset-btn" onclick="unlinkSuperset(${exIdx})">✕ Unlink Superset</button>`
+          : `<button class="link-superset-btn" onclick="openSupersetPicker()"><i class="fa-solid fa-link"></i> Link Superset</button>`}
+        <button class="remove-ex-btn" onclick="removeExercise(${exIdx})">🗑 Remove Exercise</button>
       </div>
     `;
     stage.appendChild(block);
@@ -3556,25 +3559,36 @@ function saveBarSettings(){
 }
 
 /* ================= LOADED BAR CALCULATOR ================= */
+let loadedBarIncludeBar = true;
 function openLoadedBar(){
   const input = document.getElementById('loadedBarWeightInput');
   input.value = '';
+  loadedBarIncludeBar = true;
+  document.getElementById('loadedBarIncludeToggle').classList.add('on');
   document.getElementById('loadedBarResult').innerHTML = '';
   document.getElementById('loadedBarModal').classList.add('active');
   setTimeout(()=> input.focus(), 50);
 }
 function closeLoadedBar(){ document.getElementById('loadedBarModal').classList.remove('active'); }
+function toggleLoadedBarIncludeBar(){
+  loadedBarIncludeBar = !loadedBarIncludeBar;
+  document.getElementById('loadedBarIncludeToggle').classList.toggle('on', loadedBarIncludeBar);
+  renderLoadedBarResult();
+}
 
 /* Greedy plate calculation: uses the heaviest available plates first to fill
    the weight needed on ONE side of the bar. Assumes unlimited quantity of
    each plate (typical for a commercial gym). Returns per-side breakdown plus
-   any leftover weight that couldn't be matched exactly with what's available. */
-function computeLoadedBar(totalWeight){
-  const barWeight = db.settings.barWeight || 20;
+   any leftover weight that couldn't be matched exactly with what's available.
+   When includeBar is false, totalWeight is treated as plates-only weight
+   (the bar is not subtracted and not added back into the total). */
+function computeLoadedBar(totalWeight, includeBar){
+  includeBar = includeBar !== false;
+  const barWeight = includeBar ? (db.settings.barWeight || 20) : 0;
   const available = (db.settings.availablePlates||[]).slice().sort((a,b)=> b-a);
   const perSideNeeded = (totalWeight - barWeight) / 2;
   if(perSideNeeded <= 0 || !available.length){
-    return { barWeight, perSideNeeded, counts:[], leftover: Math.max(perSideNeeded,0), achievedPerSide:0, achievedTotal: barWeight };
+    return { barWeight, includeBar, perSideNeeded, counts:[], leftover: Math.max(perSideNeeded,0), achievedPerSide:0, achievedTotal: barWeight };
   }
   let remaining = Math.round(perSideNeeded*100)/100;
   const counts = [];
@@ -3588,14 +3602,14 @@ function computeLoadedBar(totalWeight){
   const leftover = remaining > 0.01 ? remaining : 0;
   const achievedPerSide = Math.round((perSideNeeded - leftover)*100)/100;
   const achievedTotal = Math.round((barWeight + achievedPerSide*2)*100)/100;
-  return { barWeight, perSideNeeded, counts, leftover, achievedPerSide, achievedTotal };
+  return { barWeight, includeBar, perSideNeeded, counts, leftover, achievedPerSide, achievedTotal };
 }
 function renderLoadedBarResult(){
   const val = parseFloat(document.getElementById('loadedBarWeightInput').value);
   const resultEl = document.getElementById('loadedBarResult');
   if(!val || val<=0){ resultEl.innerHTML = ''; return; }
-  const r = computeLoadedBar(val);
-  if(r.perSideNeeded <= 0){
+  const r = computeLoadedBar(val, loadedBarIncludeBar);
+  if(r.includeBar && r.perSideNeeded <= 0){
     resultEl.innerHTML = `<div class="loaded-bar-summary"><div class="achieved">${r.barWeight}<small> kg (just the bar)</small></div></div>
       <small class="hint">${val}kg is at or below your ${r.barWeight}kg bar — nothing to load.</small>`;
     return;
@@ -3621,9 +3635,13 @@ function renderLoadedBarResult(){
     const meta = PLATE_CATALOG.find(p=>p.kg===c.kg);
     return `<div class="row"><span><span class="swatch" style="background:${meta.color};"></span>${c.kg} kg</span><span>× ${c.n} per side</span></div>`;
   }).join('');
+  const totalLabel = r.includeBar ? 'kg total' : 'kg plates only';
+  const bottomHint = r.includeBar
+    ? `Bar: ${r.barWeight}kg + ${r.achievedPerSide}kg per side. Load the same plates on the other side.`
+    : `${r.achievedPerSide}kg per side (bar not included). Load the same plates on the other side.`;
   resultEl.innerHTML = `
     <div class="loaded-bar-summary">
-      <div class="achieved">${r.achievedTotal}<small> kg total</small></div>
+      <div class="achieved">${r.achievedTotal}<small> ${totalLabel}</small></div>
       ${diffLine}
     </div>
     <div class="loaded-bar-visual">
@@ -3632,7 +3650,7 @@ function renderLoadedBarResult(){
       <div class="bar-plates">${plateDivs}</div>
     </div>
     <div class="loaded-bar-breakdown">${breakdownRows}</div>
-    <small class="hint" style="margin-top:10px;">Bar: ${r.barWeight}kg + ${r.achievedPerSide}kg per side. Load the same plates on the other side.</small>
+    <small class="hint" style="margin-top:10px;">${bottomHint}</small>
   `;
 }
 function saveRestSetting(){
