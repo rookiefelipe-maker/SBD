@@ -323,6 +323,8 @@
   .stepper-input{background:transparent; border:none; color:var(--white); font-family:inherit; padding:0; -moz-appearance:textfield; width:100%; min-width:0; font-size:16px;}
   .stepper-input::-webkit-outer-spin-button, .stepper-input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
   .stepper-input:focus{outline:none;}
+  .stepper.stepper-single{justify-content:center; padding:8px 4px;}
+  .stepper.stepper-single .stepper-val{font-size:16px; font-weight:800;}
 
   .set-check{width:28px; height:28px; border-radius:50%; border:2px solid var(--line); background:none; justify-self:center; color:transparent; font-size:13px; font-weight:800;}
   .set-check.done{background:var(--red); border-color:var(--red); color:var(--white);}
@@ -593,6 +595,53 @@
   }
   .time-wheel .twi.sel{color:var(--white);}
   .time-wheel-colon{display:flex; align-items:center; justify-content:center; width:12px; font-size:19px; font-weight:700; color:var(--white);}
+
+  /* App-styled weight ruler picker (horizontal scale, like a scale/dial),
+     used for the set weight field during a live workout. */
+  #weightPickerSheet{
+    position:fixed; inset:0; background:rgba(0,0,0,0.72); z-index:135;
+    display:none; align-items:flex-end; justify-content:center;
+  }
+  #weightPickerSheet.active{display:flex;}
+  .wp-card{
+    width:100%; max-width:480px; background:var(--charcoal); border:1px solid var(--line);
+    border-top-left-radius:20px; border-top-right-radius:20px;
+    padding:10px 0 max(18px, env(safe-area-inset-bottom)); animation:wpUp .22s ease;
+  }
+  @keyframes wpUp{ from{transform:translateY(16px); opacity:0;} to{transform:translateY(0); opacity:1;} }
+  .wp-handle{width:36px; height:4px; border-radius:2px; background:var(--line); margin:0 auto 14px;}
+  .wp-label{font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:var(--grey); padding:0 22px; margin-bottom:6px;}
+  .wp-value{display:flex; align-items:flex-end; gap:6px; padding:0 22px; margin-bottom:18px;}
+  .wp-value .n{font-size:44px; font-weight:900; color:var(--white); line-height:0.9; font-variant-numeric:tabular-nums;}
+  .wp-value .u{font-size:15px; color:var(--grey); font-weight:600; padding-bottom:5px;}
+  .wp-ruler-wrap{position:relative; height:78px; margin-bottom:6px;}
+  .wp-ruler-wrap::before, .wp-ruler-wrap::after{
+    content:''; position:absolute; top:0; bottom:0; width:14%; pointer-events:none; z-index:2;
+  }
+  .wp-ruler-wrap::before{ left:0; background:linear-gradient(90deg, var(--charcoal), transparent); }
+  .wp-ruler-wrap::after{ right:0; background:linear-gradient(270deg, var(--charcoal), transparent); }
+  .wp-needle{
+    position:absolute; left:50%; top:0; bottom:20px; width:2px; margin-left:-1px;
+    background:var(--red); z-index:3; pointer-events:none; border-radius:2px;
+  }
+  .wp-ruler{
+    height:100%; overflow-x:scroll; overflow-y:hidden; scroll-snap-type:x mandatory;
+    -ms-overflow-style:none; scrollbar-width:none; display:flex; align-items:flex-end;
+    position:relative;
+  }
+  .wp-ruler::-webkit-scrollbar{display:none;}
+  .wp-tick{
+    flex:0 0 auto; width:9px; height:100%; display:flex; align-items:flex-end; justify-content:center;
+    scroll-snap-align:center; position:relative;
+  }
+  .wp-tick i{display:block; width:1.5px; background:var(--line); border-radius:1px; height:16px; margin-bottom:20px;}
+  .wp-tick.mid i{height:26px; background:var(--grey);}
+  .wp-tick.major i{height:38px; background:var(--white);}
+  .wp-tick .wp-tick-lbl{
+    position:absolute; bottom:0; left:50%; transform:translateX(-50%);
+    font-size:11px; color:var(--grey); font-weight:700; white-space:nowrap;
+  }
+  .wp-actions{padding:16px 22px 0;}
 </style>
 </head>
 <body>
@@ -1032,6 +1081,21 @@
   </div>
 </div>
 
+<div id="weightPickerSheet">
+  <div class="wp-card">
+    <div class="wp-handle"></div>
+    <div class="wp-label">Weight (kg)</div>
+    <div class="wp-value"><span class="n" id="wpValueNum">20.0</span><span class="u">kg</span></div>
+    <div class="wp-ruler-wrap" id="wpRulerWrap">
+      <div class="wp-needle"></div>
+      <div class="wp-ruler" id="wpRuler"></div>
+    </div>
+    <div class="wp-actions">
+      <button class="btn-primary" style="margin-top:0;" onclick="_wpConfirm()">Set</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ================= DATA LAYER ================= */
 const DB_KEY = 'sbd_tracker_v1';
@@ -1365,6 +1429,64 @@ function _timePickerCancel(){
 }
 document.getElementById('timePickerModal').addEventListener('click', (e)=>{
   if(e.target.id==='timePickerModal') _timePickerCancel();
+});
+
+/* App-styled weight ruler picker for set weight entry during a live workout. */
+let _wpTarget = null; // {exIdx, setIdx}
+const WP_STEP = 0.5, WP_MIN = 0, WP_MAX = 400, WP_TICK_PX = 9;
+function _wpBuild(current){
+  const ruler = document.getElementById('wpRuler');
+  const wrapWidth = document.getElementById('wpRulerWrap').clientWidth;
+  const padPx = Math.max(0, (wrapWidth - WP_TICK_PX) / 2);
+  const count = Math.round((WP_MAX - WP_MIN) / WP_STEP) + 1;
+  let html = `<div class="wp-pad" style="flex:0 0 ${padPx}px;"></div>`;
+  for(let i=0;i<count;i++){
+    const v = Math.round((WP_MIN + i*WP_STEP) * 10) / 10;
+    const isMajor = Math.abs(v % 5) < 0.001;
+    const isMid = !isMajor && Math.abs(v % 1) < 0.001;
+    const cls = isMajor ? 'major' : (isMid ? 'mid' : '');
+    const lbl = isMajor ? `<span class="wp-tick-lbl">${Math.round(v)}</span>` : '';
+    html += `<div class="wp-tick ${cls}" data-v="${v}"><i></i>${lbl}</div>`;
+  }
+  html += `<div class="wp-pad" style="flex:0 0 ${padPx}px;"></div>`;
+  ruler.innerHTML = html;
+  const idx = Math.round((current - WP_MIN) / WP_STEP);
+  ruler.scrollLeft = idx * WP_TICK_PX;
+}
+function _wpReadValue(){
+  const ruler = document.getElementById('wpRuler');
+  let idx = Math.round(ruler.scrollLeft / WP_TICK_PX);
+  idx = Math.max(0, Math.min(idx, Math.round((WP_MAX-WP_MIN)/WP_STEP)));
+  return Math.round((WP_MIN + idx*WP_STEP) * 10) / 10;
+}
+function _wpOnScroll(){
+  const v = _wpReadValue();
+  document.getElementById('wpValueNum').textContent = v.toFixed(1);
+}
+function openWeightPicker(exIdx, setIdx){
+  const set = liveSession.exercises[exIdx].sets[setIdx];
+  _wpTarget = { exIdx, setIdx };
+  const current = Math.max(WP_MIN, Math.min(WP_MAX, set.w ?? 20));
+  document.getElementById('wpValueNum').textContent = current.toFixed(1);
+  document.getElementById('weightPickerSheet').classList.add('active');
+  _wpBuild(current);
+  const ruler = document.getElementById('wpRuler');
+  ruler.onscroll = ()=>{ clearTimeout(ruler._t); ruler._t = setTimeout(_wpOnScroll, 40); };
+}
+function _wpConfirm(){
+  const v = _wpReadValue();
+  if(_wpTarget){
+    typeSet(_wpTarget.exIdx, _wpTarget.setIdx, 'w', v);
+  }
+  document.getElementById('weightPickerSheet').classList.remove('active');
+  _wpTarget = null;
+}
+function _wpCancel(){
+  document.getElementById('weightPickerSheet').classList.remove('active');
+  _wpTarget = null;
+}
+document.getElementById('weightPickerSheet').addEventListener('click', (e)=>{
+  if(e.target.id==='weightPickerSheet') _wpCancel();
 });
 
 /* ================= DASHBOARD ================= */
@@ -2190,7 +2312,7 @@ function renderSets(exIdx){
 
   const header = document.createElement('div');
   header.className = 'set-table-header';
-  header.innerHTML = `<span>#</span><span>Reps</span><span>Weight (kg)</span><span></span>`;
+  header.innerHTML = `<span>#</span><span>Weight (kg)</span><span>Reps</span><span></span>`;
   wrap.appendChild(header);
 
   let workingNum = 0;
@@ -2215,15 +2337,13 @@ function renderSets(exIdx){
         <span class="idx${set.isWarmup?' warmup-lbl':''}">${label}</span>
         <button type="button" class="rm-set" onclick="removeSet(${exIdx}, ${setIdx})">×</button>
       </div>
+      <div class="stepper stepper-single">
+        <input type="number" inputmode="none" step="0.5" class="stepper-val stepper-input" value="${set.w ?? 0}" readonly onclick="openWeightPicker(${exIdx}, ${setIdx})">
+      </div>
       <div class="stepper">
         <button type="button" onclick="stepSet(${exIdx}, ${setIdx}, 'r', -1)">–</button>
         <input type="number" inputmode="numeric" class="stepper-val stepper-input" value="${set.r ?? 0}" onchange="typeSet(${exIdx}, ${setIdx}, 'r', this.value)" onclick="this.select()">
         <button type="button" onclick="stepSet(${exIdx}, ${setIdx}, 'r', 1)">+</button>
-      </div>
-      <div class="stepper">
-        <button type="button" onclick="stepSet(${exIdx}, ${setIdx}, 'w', -2.5)">–</button>
-        <input type="number" inputmode="decimal" step="0.5" class="stepper-val stepper-input" value="${set.w ?? 0}" onchange="typeSet(${exIdx}, ${setIdx}, 'w', this.value)" onclick="this.select()">
-        <button type="button" onclick="stepSet(${exIdx}, ${setIdx}, 'w', 2.5)">+</button>
       </div>
       <button type="button" class="set-check ${isDone?'done':''}" onclick="toggleSetDone(${exIdx}, ${setIdx})">${isDone?'✓':''}</button>
     `;
