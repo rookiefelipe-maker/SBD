@@ -1459,9 +1459,15 @@ function _wpReadValue(){
   idx = Math.max(0, Math.min(idx, Math.round((WP_MAX-WP_MIN)/WP_STEP)));
   return Math.round((WP_MIN + idx*WP_STEP) * 10) / 10;
 }
+let _wpLastTickValue = null;
 function _wpOnScroll(){
   const v = _wpReadValue();
   document.getElementById('wpValueNum').textContent = v.toFixed(1);
+  if(_wpLastTickValue !== null && v !== _wpLastTickValue){
+    playTickSound();
+    vibrateTick();
+  }
+  _wpLastTickValue = v;
 }
 function openWeightPicker(exIdx, setIdx){
   const set = liveSession.exercises[exIdx].sets[setIdx];
@@ -1470,8 +1476,9 @@ function openWeightPicker(exIdx, setIdx){
   document.getElementById('wpValueNum').textContent = current.toFixed(1);
   document.getElementById('weightPickerSheet').classList.add('active');
   _wpBuild(current);
+  _wpLastTickValue = current;
   const ruler = document.getElementById('wpRuler');
-  ruler.onscroll = ()=>{ clearTimeout(ruler._t); ruler._t = setTimeout(_wpOnScroll, 40); };
+  ruler.onscroll = ()=>{ _wpOnScroll(); };
 }
 function _wpConfirm(){
   const v = _wpReadValue();
@@ -3078,6 +3085,44 @@ function playPopSound(){
 function vibrateTap(){
   if('vibrate' in navigator){
     try{ navigator.vibrate(15); } catch(e){}
+  }
+}
+/* Detent "click" sound for the weight ruler picker — a dry mechanical tick,
+   like a bike freewheel pawl clicking against the ratchet, fired once per
+   tick crossed. Built from filtered noise (not a tone) for that clicky,
+   non-musical character. */
+let _tickNoiseBuffer = null;
+function _getTickNoiseBuffer(ctx){
+  if(_tickNoiseBuffer && _tickNoiseBuffer._ctx === ctx) return _tickNoiseBuffer;
+  const buffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate*0.03), ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for(let i=0;i<data.length;i++){ data[i] = Math.random()*2-1; }
+  buffer._ctx = ctx;
+  _tickNoiseBuffer = buffer;
+  return buffer;
+}
+function playTickSound(){
+  const ctx = ensureAudioCtx();
+  if(!ctx) return;
+  try{
+    const now = ctx.currentTime;
+    const noise = ctx.createBufferSource();
+    noise.buffer = _getTickNoiseBuffer(ctx);
+    const bandpass = ctx.createBiquadFilter();
+    bandpass.type = 'bandpass';
+    bandpass.frequency.value = 2800;
+    bandpass.Q.value = 0.9;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.9, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now+0.014);
+    noise.connect(bandpass).connect(gain).connect(ctx.destination);
+    noise.start(now);
+    noise.stop(now+0.016);
+  } catch(e){ /* audio not available */ }
+}
+function vibrateTick(){
+  if('vibrate' in navigator){
+    try{ navigator.vibrate(3); } catch(e){}
   }
 }
 document.addEventListener('click', (e)=>{
