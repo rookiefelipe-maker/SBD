@@ -1470,6 +1470,7 @@ function _wpOnScroll(){
   _wpLastTickValue = v;
 }
 function openWeightPicker(exIdx, setIdx){
+  ensureAudioCtx(); // wake up audio here, inside a real tap — not later during scroll
   const set = liveSession.exercises[exIdx].sets[setIdx];
   _wpTarget = { exIdx, setIdx };
   const current = Math.max(WP_MIN, Math.min(WP_MAX, set.w ?? 20));
@@ -1479,6 +1480,10 @@ function openWeightPicker(exIdx, setIdx){
   _wpLastTickValue = current;
   const ruler = document.getElementById('wpRuler');
   ruler.onscroll = ()=>{ _wpOnScroll(); };
+  // Re-wake audio right as the finger touches the ruler to start dragging —
+  // the most reliable moment, in case it dozed off while the sheet was open.
+  ruler.ontouchstart = ()=>{ ensureAudioCtx(); };
+  ruler.onpointerdown = ()=>{ ensureAudioCtx(); };
 }
 function _wpConfirm(){
   const v = _wpReadValue();
@@ -3104,6 +3109,15 @@ function _getTickNoiseBuffer(ctx){
 function playTickSound(){
   const ctx = ensureAudioCtx();
   if(!ctx) return;
+  // If it's still mid-resume (e.g. it had auto-suspended from being idle),
+  // schedule the click for right after resume finishes instead of dropping it.
+  if(ctx.state !== 'running'){
+    ctx.resume().then(()=>{ try{ _fireTick(ctx); }catch(e){} });
+    return;
+  }
+  _fireTick(ctx);
+}
+function _fireTick(ctx){
   try{
     const now = ctx.currentTime;
     const noise = ctx.createBufferSource();
