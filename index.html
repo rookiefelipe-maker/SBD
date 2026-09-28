@@ -265,6 +265,9 @@
   .switch.on{background:var(--green);}
   .switch.on .knob{left:21px;}
   .switch.disabled{opacity:.35; cursor:not-allowed;}
+  .checkbox{width:26px; height:26px; border-radius:7px; border:2px solid var(--line); background:none; flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center; color:transparent; font-size:14px; font-weight:800; transition:background .15s ease, border-color .15s ease;}
+  .checkbox.on{background:var(--green); border-color:var(--green); color:var(--white);}
+  .checkbox.disabled{opacity:.35; cursor:not-allowed;}
 
   .progress-tag{
     display:inline-flex; align-items:center; gap:6px; background:var(--charcoal); border:1px solid var(--line); border-radius:20px; padding:4px 10px;
@@ -1664,9 +1667,9 @@ function normalizeRoutineExercises(r){
   const topNames = r.topSetExercises || [];
   return (r.exercises || []).map(e=>{
     if(typeof e === 'string'){
-      return { name: e, sets: 1, topSet: topNames.includes(e), progression: false };
+      return { name: e, sets: 1, topSet: topNames.includes(e), progression: false, topReps: 1, backoffSets: 3 };
     }
-    return { name: e.name, sets: e.sets || 1, topSet: !!e.topSet, progression: !!e.progression };
+    return { name: e.name, sets: e.sets || 1, topSet: !!e.topSet, progression: !!e.progression, topReps: e.topReps || 1, backoffSets: (e.backoffSets ?? 3) };
   });
 }
 
@@ -1700,7 +1703,7 @@ function renderExerciseCatalogDatalist(){
   dl.innerHTML = db.exerciseCatalog.map(n=> `<option value="${n.replace(/"/g,'&quot;')}">`).join('');
 }
 function addDraftExercise(){
-  routineDraftExercises.push({ name:'', sets:3, topSet:false, progression:false, basicKey:null, _origName:'' });
+  routineDraftExercises.push({ name:'', sets:3, topSet:false, progression:false, topReps:1, backoffSets:3, basicKey:null, _origName:'' });
   renderRoutineDraftExercises();
   setTimeout(()=>{
     const inputs = document.querySelectorAll('#routineExercisesWrap .draft-ex-name');
@@ -1748,6 +1751,16 @@ function toggleDraftTopSet(idx){
   if(!ex.topSet) ex.progression = false; // progression needs a top set to compare
   renderRoutineDraftExercises();
 }
+function changeDraftTopReps(idx, delta){
+  const ex = routineDraftExercises[idx];
+  ex.topReps = Math.max(1, (ex.topReps||1) + delta);
+  renderRoutineDraftExercises();
+}
+function changeDraftBackoffSets(idx, delta){
+  const ex = routineDraftExercises[idx];
+  ex.backoffSets = Math.max(0, (ex.backoffSets ?? 3) + delta);
+  renderRoutineDraftExercises();
+}
 function toggleDraftBasic(idx, key){
   const ex = routineDraftExercises[idx];
   ex.basicKey = ex.basicKey === key ? null : key;
@@ -1783,7 +1796,7 @@ function renderRoutineDraftExercises(){
         </div>
         <button class="rm-exercise" style="margin-left:10px; white-space:nowrap;" onclick="removeDraftExerciseAt(${idx})">Remove</button>
       </div>
-      <div class="set-row" style="justify-content:space-between; margin-top:8px;">
+      <div class="set-row" style="display:flex; justify-content:space-between; margin-top:8px;">
         <span style="font-size:11px; color:var(--grey); text-transform:uppercase; letter-spacing:.5px;">Sets</span>
         <div style="display:flex; align-items:center; gap:16px;">
           <button class="rm-set" style="font-size:20px;" onclick="changeDraftSets(${idx},-1)">−</button>
@@ -1793,11 +1806,11 @@ function renderRoutineDraftExercises(){
       </div>
       <div class="toggle-row" style="margin-top:6px;">
         <span class="toggle-label">Top Set</span>
-        <div class="switch ${ex.topSet?'on':''}" onclick="toggleDraftTopSet(${idx})"><div class="knob"></div></div>
+        <div class="checkbox ${ex.topSet?'on':''}" onclick="toggleDraftTopSet(${idx})">✓</div>
       </div>
       <div class="toggle-row">
         <span class="toggle-label">Progression</span>
-        <div class="switch ${ex.progression?'on':''} ${!ex.topSet?'disabled':''}" onclick="toggleDraftProgression(${idx})"><div class="knob"></div></div>
+        <div class="checkbox ${ex.progression?'on':''} ${!ex.topSet?'disabled':''}" onclick="toggleDraftProgression(${idx})">✓</div>
       </div>
       <div class="toggle-row" style="align-items:center;">
         <span class="toggle-label">Basic lift</span>
@@ -1810,6 +1823,23 @@ function renderRoutineDraftExercises(){
         </div>
       </div>
       ${ex.basicKey ? '<small class="hint" style="margin-top:4px;">Counts toward the SBD dashboard card as ' + BASICS[ex.basicKey] + ', whatever this exercise is named</small>' : ''}
+      ${(ex.topSet && ex.basicKey) ? `
+      <div class="set-row" style="display:flex; justify-content:space-between; margin-top:8px;">
+        <span style="font-size:11px; color:var(--grey); text-transform:uppercase; letter-spacing:.5px; white-space:nowrap;">Top Set reps</span>
+        <div style="display:flex; align-items:center; gap:16px;">
+          <button class="rm-set" style="font-size:20px;" onclick="changeDraftTopReps(${idx},-1)">−</button>
+          <span style="min-width:18px; text-align:center; font-weight:800; font-size:16px;">${ex.topReps||1}</span>
+          <button class="rm-set" style="font-size:20px;" onclick="changeDraftTopReps(${idx},1)">+</button>
+        </div>
+      </div>
+      <div class="set-row" style="display:flex; justify-content:space-between; margin-top:4px;">
+        <span style="font-size:11px; color:var(--grey); text-transform:uppercase; letter-spacing:.5px; white-space:nowrap;">Backoff Sets</span>
+        <div style="display:flex; align-items:center; gap:16px;">
+          <button class="rm-set" style="font-size:20px;" onclick="changeDraftBackoffSets(${idx},-1)">−</button>
+          <span style="min-width:18px; text-align:center; font-weight:800; font-size:16px;">${ex.backoffSets ?? 3}</span>
+          <button class="rm-set" style="font-size:20px;" onclick="changeDraftBackoffSets(${idx},1)">+</button>
+        </div>
+      </div>` : ''}
     `;
     wrap.appendChild(block);
   });
@@ -1818,7 +1848,11 @@ function saveRoutine(){
   const name = document.getElementById('routineNameInput').value.trim();
   if(!name){ toast('Give the routine a name'); return; }
   const cleanExercises = routineDraftExercises
-    .map(e=> ({ name: e.name.trim(), sets: e.sets||1, topSet: !!e.topSet, progression: !!e.topSet && !!e.progression }))
+    .map(e=> {
+      const o = { name: e.name.trim(), sets: e.sets||1, topSet: !!e.topSet, progression: !!e.topSet && !!e.progression };
+      if(e.topSet && e.basicKey){ o.topReps = e.topReps||1; o.backoffSets = e.backoffSets ?? 3; }
+      return o;
+    })
     .filter(e=> e.name);
   if(!cleanExercises.length){ toast('Add at least one exercise'); return; }
 
@@ -1987,13 +2021,23 @@ function startWorkout(routineId){
     startedAt: Date.now(),
     warmupEndedAt: null,
     focusedExerciseIndex: -1,
-    exercises: norm.map(ex=> ({
-      name: ex.name,
-      sets: Array.from({length: Math.max(1, ex.sets||1)}, (_,i)=> ({ w:null, r:null, isTopSet: !!(ex.topSet && i===0) })),
-      supersetGroup:null, supersetRole:null,
-      isTopSetExercise: ex.topSet,
-      isProgressionExercise: !!ex.progression
-    }))
+    exercises: norm.map(ex=> {
+      // Basic lift + Top Set: start with the top set only; backoffs are
+      // generated after it is completed.
+      const basicTop = !!(ex.topSet && basicKeyForExercise(ex.name));
+      const n = basicTop ? 1 : Math.max(1, ex.sets||1);
+      return {
+        name: ex.name,
+        sets: Array.from({length: n}, (_,i)=> ({ w:null, r: basicTop ? (ex.topReps||1) : null, isTopSet: !!(ex.topSet && i===0) })),
+        supersetGroup:null, supersetRole:null,
+        isTopSetExercise: ex.topSet,
+        isProgressionExercise: !!ex.progression,
+        basicTop: basicTop,
+        topReps: ex.topReps || 1,
+        backoffSets: ex.backoffSets ?? 3,
+        backoffGenerated: false
+      };
+    })
   };
   saveActiveSession();
   document.getElementById('liveWorkoutTitle').textContent = r.name;
@@ -2411,13 +2455,55 @@ function stepSet(exIdx, setIdx, field, delta){
 }
 function toggleSetDone(exIdx, setIdx){
   const set = liveSession.exercises[exIdx].sets[setIdx];
+  if(!set.done && topSetMissingData(exIdx, set)) return;
   set.done = !set.done;
   saveActiveSession();
   renderSets(exIdx);
-  if(set.done) handleSetCompleted(exIdx);
+  if(set.done) handleSetCompleted(exIdx, set);
 }
-function handleSetCompleted(exIdx){
+/* Basic lift Top Set: once the top set is done, its e1RM (same Epley helper
+   used everywhere else) drives the backoff sets. Generated only once; if the
+   top set is re-completed after a correction, backoffs not yet done are
+   recalculated instead of duplicated. */
+function generateBackoffSets(exIdx, topSet){
   const ex = liveSession.exercises[exIdx];
+  if(!ex.basicTop || !(ex.backoffSets > 0)) return;
+  if(!(topSet.w > 0) || !(topSet.r > 0)) return;
+  // Top sets are assumed to be ~RPE 8. Standard RPE 8 %1RM table by reps (1-10).
+  const RPE8_PCT = [0.92, 0.89, 0.86, 0.84, 0.81, 0.79, 0.76, 0.74, 0.71, 0.68];
+  const pct = RPE8_PCT[Math.min(Math.round(topSet.r), RPE8_PCT.length) - 1];
+  const e1rm = topSet.w / pct;
+  const BACKOFF_REPS = 5, BACKOFF_PCT = 0.725;
+  let w = Math.round((e1rm * BACKOFF_PCT) / 5) * 5;
+  if(w > topSet.w) w = topSet.w;
+  if(ex.backoffGenerated){
+    ex.sets.forEach(s=>{ if(s.isBackoff && !s.done) s.w = w; });
+    return;
+  }
+  const topIdx = ex.sets.indexOf(topSet);
+  const newSets = Array.from({length: ex.backoffSets}, ()=> ({ w: w, r: BACKOFF_REPS, isTopSet:false, isBackoff:true, done:false }));
+  ex.sets.splice(topIdx + 1, 0, ...newSets);
+  ex.backoffGenerated = true;
+}
+/* A Basic Lift top set needs weight and reps before it can be completed,
+   since the backoffs are calculated from it. */
+function topSetMissingData(exIdx, set){
+  const ex = liveSession.exercises[exIdx];
+  if(ex.basicTop && set.isTopSet && !set.isWarmup && !(set.w > 0 && set.r > 0)){
+    toast('Enter weight and reps for the Top Set');
+    return true;
+  }
+  return false;
+}
+function handleSetCompleted(exIdx, doneSet){
+  const ex = liveSession.exercises[exIdx];
+  // Generate backoffs right away (before the "exercise done?" check below),
+  // whichever control completed the top set (row check or footer button).
+  if(doneSet && doneSet.isTopSet && ex.basicTop){
+    generateBackoffSets(exIdx, doneSet);
+    saveActiveSession();
+    renderSets(exIdx);
+  }
   // Give the user 5 seconds to start the rest timer manually. If they don't,
   // it starts itself and lets them know with a notification + alert sound.
   scheduleAutoRest(restSecondsForExercise(ex.name));
@@ -2489,10 +2575,11 @@ function markCurrentSetDone(){
     const ex = liveSession.exercises[exIdx];
     const pendingSet = ex.sets.find(s=> !s.done);
     if(pendingSet){
+      if(topSetMissingData(exIdx, pendingSet)) return;
       pendingSet.done = true;
       saveActiveSession();
       renderSets(exIdx);
-      handleSetCompleted(exIdx);
+      handleSetCompleted(exIdx, pendingSet);
       return;
     }
   }
@@ -2547,7 +2634,8 @@ async function updateRoutineFromWorkout(){
     name: ex.name,
     sets: Math.max(1, ex.sets.length || 1),
     topSet: !!ex.isTopSetExercise,
-    progression: !!ex.isProgressionExercise
+    progression: !!ex.isProgressionExercise,
+    ...(ex.basicTop ? { topReps: ex.topReps || 1, backoffSets: ex.backoffSets ?? 3 } : {})
   }));
   const existing = liveSession.routineId ? db.routines.find(x=>x.id===liveSession.routineId) : null;
   if(existing){
@@ -2633,6 +2721,7 @@ function pickExercise(name){
     ex.name = name;
     ex.sets = [{w:null,r:null,isTopSet:false}];
     ex.isProgressionExercise = false;
+    ex.basicTop = false; ex.backoffGenerated = false;
   }
   closeOverlay('exercisePickerOverlay');
   renderLiveWorkout();
