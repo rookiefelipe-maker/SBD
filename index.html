@@ -562,6 +562,14 @@
   .confirm-message{font-size:14px; line-height:1.45; color:var(--white); margin-bottom:20px;}
   .confirm-actions{display:flex; flex-direction:column; gap:8px;}
   .confirm-actions button{margin-top:0;}
+  .rir-options{display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; margin-top:16px;}
+  .rir-option{width:100%; margin-top:0;}
+  #topSetProgressionPopup{z-index:140;}
+  #topSetProgressionPopup .modal-card{max-width:300px; text-align:center; padding:20px 18px 18px; border-color:rgba(224,38,27,.35);}
+  .progress-popup-close{position:absolute; top:8px; right:8px; background:none; border:none; color:var(--grey); font-size:22px; padding:6px 10px; line-height:1;}
+  .progress-popup-badge{display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; border-radius:50%; background:rgba(224,38,27,.14); color:var(--red); font-size:22px; margin:0 auto 12px;}
+  .progress-popup-title{font-size:13px; letter-spacing:1.4px; text-transform:uppercase; color:var(--grey); margin-bottom:8px; font-weight:800;}
+  .progress-popup-message{font-size:16px; line-height:1.35; font-weight:800; color:var(--white);}
 
   /* App-styled time picker (replaces native input[type=time] on Android) */
   .time-field-btn{
@@ -613,10 +621,20 @@
   }
   @keyframes wpUp{ from{transform:translateY(16px); opacity:0;} to{transform:translateY(0); opacity:1;} }
   .wp-handle{width:36px; height:4px; border-radius:2px; background:var(--line); margin:0 auto 14px;}
+  .wp-topbar{position:relative; padding:0 22px 0;}
+  .wp-manual-btn{
+    position:absolute; right:22px; top:0; background:none; border:none; color:var(--grey);
+    font-size:10px; font-weight:800; letter-spacing:1px; text-transform:uppercase; padding:4px 0;
+  }
   .wp-label{font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:var(--grey); padding:0 22px; margin-bottom:6px;}
   .wp-value{display:flex; align-items:flex-end; gap:6px; padding:0 22px; margin-bottom:18px;}
   .wp-value .n{font-size:44px; font-weight:900; color:var(--white); line-height:0.9; font-variant-numeric:tabular-nums;}
   .wp-value .u{font-size:15px; color:var(--grey); font-weight:600; padding-bottom:5px;}
+  .wp-manual-input{
+    display:none; width:100%; margin:0 22px 14px; background:var(--charcoal); border:1px solid var(--line);
+    border-radius:10px; padding:12px 14px; font-size:18px; font-weight:700; color:var(--white);
+  }
+  .wp-manual-input.active{display:block;}
   .wp-ruler-wrap{position:relative; height:78px; margin-bottom:6px;}
   .wp-ruler-wrap::before, .wp-ruler-wrap::after{
     content:''; position:absolute; top:0; bottom:0; width:14%; pointer-events:none; z-index:2;
@@ -1068,6 +1086,28 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="rirPromptModal">
+  <div class="modal-card" style="max-width:340px;">
+    <div class="modal-title">Top set effort</div>
+    <div class="confirm-message">How many more reps could you have done?</div>
+    <div class="rir-options">
+      <button class="btn-secondary rir-option" data-rir="0">0</button>
+      <button class="btn-secondary rir-option" data-rir="1">1</button>
+      <button class="btn-secondary rir-option" data-rir="2">2</button>
+      <button class="btn-secondary rir-option" data-rir="3">3+</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="topSetProgressionPopup">
+  <div class="modal-card">
+    <button class="progress-popup-close" onclick="closeTopSetProgressionPopup()">×</button>
+    <div class="progress-popup-badge">↑</div>
+    <div class="progress-popup-title">Progression</div>
+    <div class="progress-popup-message">Ready to increase the weight next session 👊🏼</div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="timePickerModal">
   <div class="modal-card">
     <div class="modal-title" id="timePickerModalTitle">Set time</div>
@@ -1087,8 +1127,12 @@
 <div id="weightPickerSheet">
   <div class="wp-card">
     <div class="wp-handle"></div>
+    <div class="wp-topbar">
+      <button class="wp-manual-btn" onclick="toggleWeightManualEntry()">Edit manually</button>
+    </div>
     <div class="wp-label">Weight (kg)</div>
     <div class="wp-value"><span class="n" id="wpValueNum">20.0</span><span class="u">kg</span></div>
+    <input id="wpManualInput" type="number" inputmode="decimal" step="0.5" min="0" max="400" class="wp-manual-input" placeholder="Enter weight" oninput="_wpManualInputChanged()">
     <div class="wp-ruler-wrap" id="wpRulerWrap">
       <div class="wp-needle"></div>
       <div class="wp-ruler" id="wpRuler"></div>
@@ -1343,6 +1387,78 @@ function progressionAlertFor(exerciseName, referenceDateStr){
   return null;
 }
 
+function topSingleRIRHistory(exerciseName){
+  const norm = normalizeName(exerciseName);
+  const entries = [];
+  if(liveSession){
+    liveSession.exercises.forEach(ex=>{
+      if(normalizeName(ex.name)!==norm) return;
+      (ex.sets || []).forEach(set=>{
+        if(!set.isTopSet || set.w == null || set.r == null || typeof set.rir !== 'number') return;
+        entries.push({ weight: set.w, rir: set.rir, date: new Date(liveSession.startedAt).toISOString().slice(0,10) });
+      });
+    });
+  }
+  db.sessions.slice().sort((a,b)=> a.date.localeCompare(b.date)).forEach(s=>{
+    s.exercises.forEach(e=>{
+      if(normalizeName(e.name)!==norm) return;
+      const top = (e.sets||[]).find(x=>x.isTopSet);
+      if(!top || top.w==null || top.r==null || typeof top.rir !== 'number') return;
+      entries.push({ weight: top.w, rir: top.rir, date: s.date });
+    });
+  });
+  return entries;
+}
+function topSingleRIRProgressionAlertFor(exerciseName){
+  const entries = topSingleRIRHistory(exerciseName).filter(x=> x.rir >= 2);
+  if(!entries.length) return null;
+  entries.sort((a,b)=> (a.date || '').localeCompare(b.date || ''));
+  const latest = entries[entries.length-1];
+  return { weight: latest.weight, rir: latest.rir };
+}
+
+let _rirPromptResolve = null;
+function askTopSetRIR(){
+  const modal = document.getElementById('rirPromptModal');
+  modal.classList.add('active');
+  return new Promise(resolve=>{
+    _rirPromptResolve = resolve;
+  });
+}
+function closeTopSetProgressionPopup(){
+  const modal = document.getElementById('topSetProgressionPopup');
+  if(!modal) return;
+  modal.classList.remove('active');
+  stopConfetti();
+  clearTimeout(showTopSetProgressionPopup._timer);
+  showTopSetProgressionPopup._timer = null;
+}
+function showTopSetProgressionPopup(){
+  const modal = document.getElementById('topSetProgressionPopup');
+  if(!modal) return;
+  modal.classList.add('active');
+  launchConfetti();
+  clearTimeout(showTopSetProgressionPopup._timer);
+  showTopSetProgressionPopup._timer = null;
+}
+function _answerTopSetRIR(value){
+  const modal = document.getElementById('rirPromptModal');
+  modal.classList.remove('active');
+  if(value >= 2){
+    showTopSetProgressionPopup();
+  }
+  if(_rirPromptResolve){
+    _rirPromptResolve(value);
+    _rirPromptResolve = null;
+  }
+}
+document.querySelectorAll('.rir-option').forEach(btn=>{
+  btn.addEventListener('click', ()=> _answerTopSetRIR(Number(btn.dataset.rir)));
+});
+document.getElementById('rirPromptModal').addEventListener('click', (e)=>{
+  if(e.target.id === 'rirPromptModal') _answerTopSetRIR(0);
+});
+
 function toast(msg){
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -1436,6 +1552,7 @@ document.getElementById('timePickerModal').addEventListener('click', (e)=>{
 
 /* App-styled weight ruler picker for set weight entry during a live workout. */
 let _wpTarget = null; // {exIdx, setIdx}
+let _wpManualMode = false;
 const WP_STEP = 0.5, WP_MIN = 0, WP_MAX = 400, WP_TICK_PX = 9;
 function _wpBuild(current){
   const ruler = document.getElementById('wpRuler');
@@ -1462,6 +1579,31 @@ function _wpReadValue(){
   idx = Math.max(0, Math.min(idx, Math.round((WP_MAX-WP_MIN)/WP_STEP)));
   return Math.round((WP_MIN + idx*WP_STEP) * 10) / 10;
 }
+function _wpClampValue(v){
+  const x = Number(v);
+  if(!Number.isFinite(x)) return 0;
+  return Math.min(WP_MAX, Math.max(WP_MIN, Math.round(x * 2) / 2));
+}
+function _wpManualInputChanged(){
+  const input = document.getElementById('wpManualInput');
+  if(!input) return;
+  const v = _wpClampValue(input.value);
+  document.getElementById('wpValueNum').textContent = v.toFixed(1);
+}
+function toggleWeightManualEntry(){
+  const manualInput = document.getElementById('wpManualInput');
+  const btn = document.querySelector('.wp-manual-btn');
+  _wpManualMode = !_wpManualMode;
+  manualInput.classList.toggle('active', _wpManualMode);
+  manualInput.style.display = _wpManualMode ? 'block' : 'none';
+  btn.textContent = _wpManualMode ? 'Use slider' : 'Edit manually';
+  const current = document.getElementById('wpValueNum').textContent.replace(/\s*kg$/i, '');
+  if(_wpManualMode){
+    manualInput.value = current;
+    manualInput.focus();
+    manualInput.select();
+  }
+}
 let _wpLastTickValue = null;
 function _wpOnScroll(){
   const v = _wpReadValue();
@@ -1476,8 +1618,14 @@ function openWeightPicker(exIdx, setIdx){
   ensureAudioCtx(); // wake up audio here, inside a real tap — not later during scroll
   const set = liveSession.exercises[exIdx].sets[setIdx];
   _wpTarget = { exIdx, setIdx };
+  _wpManualMode = false;
   const current = Math.max(WP_MIN, Math.min(WP_MAX, set.w ?? 20));
+  const manualInput = document.getElementById('wpManualInput');
+  const btn = document.querySelector('.wp-manual-btn');
   document.getElementById('wpValueNum').textContent = current.toFixed(1);
+  manualInput.classList.remove('active');
+  manualInput.style.display = 'none';
+  btn.textContent = 'Edit manually';
   document.getElementById('weightPickerSheet').classList.add('active');
   _wpBuild(current);
   _wpLastTickValue = current;
@@ -1489,16 +1637,29 @@ function openWeightPicker(exIdx, setIdx){
   ruler.onpointerdown = ()=>{ ensureAudioCtx(); };
 }
 function _wpConfirm(){
-  const v = _wpReadValue();
+  const manualInput = document.getElementById('wpManualInput');
+  const v = _wpManualMode && manualInput && manualInput.value !== '' ? _wpClampValue(manualInput.value) : _wpReadValue();
   if(_wpTarget){
     typeSet(_wpTarget.exIdx, _wpTarget.setIdx, 'w', v);
   }
   document.getElementById('weightPickerSheet').classList.remove('active');
   _wpTarget = null;
+  _wpManualMode = false;
+  manualInput.classList.remove('active');
+  manualInput.style.display = 'none';
+  document.querySelector('.wp-manual-btn').textContent = 'Edit manually';
 }
 function _wpCancel(){
   document.getElementById('weightPickerSheet').classList.remove('active');
   _wpTarget = null;
+  _wpManualMode = false;
+  const manualInput = document.getElementById('wpManualInput');
+  if(manualInput){
+    manualInput.classList.remove('active');
+    manualInput.style.display = 'none';
+  }
+  const btn = document.querySelector('.wp-manual-btn');
+  if(btn) btn.textContent = 'Edit manually';
 }
 document.getElementById('weightPickerSheet').addEventListener('click', (e)=>{
   if(e.target.id==='weightPickerSheet') _wpCancel();
@@ -2361,10 +2522,14 @@ function renderSets(exIdx){
   const wrap = document.getElementById('sets-'+exIdx);
   wrap.innerHTML = '';
   const ex = liveSession.exercises[exIdx];
+  const singleRepRIRAlert = ex.isProgressionExercise && (ex.topReps || 1) === 1 && ex.basicTop
+    ? topSingleRIRProgressionAlertFor(ex.name)
+    : null;
   // If this exercise is flagged for progression and the same weight × 5 reps
   // hit the top set two calendar weeks running, the top-set row blinks red
   // instead of sitting on the usual fixed red-dim background.
-  const progAlert = ex.isProgressionExercise ? progressionAlertFor(ex.name, todayStr()) : null;
+  const progAlert = ex.isProgressionExercise && !singleRepRIRAlert ? progressionAlertFor(ex.name, todayStr()) : null;
+  const activeProgressionAlert = singleRepRIRAlert || progAlert;
 
   const header = document.createElement('div');
   header.className = 'set-table-header';
@@ -2378,8 +2543,8 @@ function renderSets(exIdx){
     // this set, stop blinking — a lone weight typed in (with reps still
     // empty) shouldn't be enough to silence the alert, since it could be an
     // accidental keystroke and not a completed set.
-    const alreadyProgressed = progAlert && set.w!=null && set.w > progAlert.weight && set.r!=null && set.r > 0;
-    const blink = set.isTopSet && progAlert && !alreadyProgressed ? ' progression-alert' : '';
+    const alreadyProgressed = activeProgressionAlert && set.w!=null && set.w > activeProgressionAlert.weight && set.r!=null && set.r > 0;
+    const blink = set.isTopSet && activeProgressionAlert && !alreadyProgressed ? ' progression-alert' : '';
     row.className = 'set-row' + (set.isTopSet ? ' is-topset' : '') + (set.isWarmup ? ' is-warmup' : '') + blink;
     if(!set.isWarmup) workingNum++;
     const label = set.isWarmup ? 'W' : workingNum;
@@ -2495,8 +2660,13 @@ function topSetMissingData(exIdx, set){
   }
   return false;
 }
-function handleSetCompleted(exIdx, doneSet){
+async function handleSetCompleted(exIdx, doneSet){
   const ex = liveSession.exercises[exIdx];
+  if(doneSet && doneSet.isTopSet && ex.basicTop && ex.isProgressionExercise && (ex.topReps || 1) === 1){
+    const rirAnswer = await askTopSetRIR();
+    doneSet.rir = Number.isFinite(rirAnswer) ? Math.max(0, rirAnswer) : 0;
+    saveActiveSession();
+  }
   // Generate backoffs right away (before the "exercise done?" check below),
   // whichever control completed the top set (row check or footer button).
   if(doneSet && doneSet.isTopSet && ex.basicTop){
