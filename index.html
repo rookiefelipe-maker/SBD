@@ -370,6 +370,24 @@
     .focus-complete h3{font-size:18px; margin-bottom:8px;}
     .focus-complete p{color:var(--grey); font-size:13px; line-height:1.45;}
 
+    .preview-screen{width:100%; max-width:480px; margin:0 auto; padding:6px 0 24px;}
+    .preview-head{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:22px 20px 18px; margin-bottom:14px; text-align:center;}
+    .preview-kicker{font-size:11px; color:var(--red); text-transform:uppercase; letter-spacing:2px; font-weight:700; margin-bottom:6px;}
+    .preview-head h2{font-size:24px; font-weight:800; letter-spacing:0.2px; margin-bottom:16px;}
+    .preview-stats{display:flex; gap:10px;}
+    .preview-stats div{flex:1; border:1px solid var(--line); border-radius:10px; padding:10px 6px; display:flex; flex-direction:column; gap:2px;}
+    .preview-stats b{font-size:20px; font-weight:800; color:var(--white);}
+    .preview-stats span{font-size:10px; color:var(--grey); text-transform:uppercase; letter-spacing:1px;}
+    .preview-list{display:flex; flex-direction:column; gap:8px; margin-bottom:16px;}
+    .preview-ex{display:flex; align-items:center; gap:12px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px;}
+    .preview-num{width:30px; height:30px; flex:none; border-radius:50%; background:var(--red-dim); color:var(--red); font-size:13px; font-weight:800; display:flex; align-items:center; justify-content:center;}
+    .preview-info{flex:1; min-width:0;}
+    .preview-name{font-size:14px; font-weight:700; display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+    .preview-tag{font-size:9px; color:var(--gold); border:1px solid var(--gold); border-radius:4px; padding:1px 5px; text-transform:uppercase; letter-spacing:0.5px;}
+    .preview-last{font-size:11px; color:var(--grey); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+    .preview-sets{font-size:11px; color:var(--grey); text-transform:uppercase; letter-spacing:0.5px; text-align:right; flex:none; max-width:90px;}
+    .preview-start{margin-top:0;}
+
     .warmup-screen{
       width:100%; max-width:420px; margin:14vh auto 0;
       background:var(--card); border:1px solid var(--line); border-radius:16px;
@@ -420,6 +438,9 @@
   .rest-dim-label{font-size:13px; color:var(--white); text-transform:uppercase; letter-spacing:2px;}
   @keyframes restDimPulse{ from{transform:scale(1.4); opacity:0;} to{transform:scale(1); opacity:1;} }
   .rest-dim-hint{font-size:12px; color:var(--grey); text-transform:uppercase; letter-spacing:1px;}
+  .rest-dim-presets{display:flex; gap:8px; margin-top:10px; width:min(92vw,420px);}
+  .rest-dim-presets button{flex:1; min-width:0; background:transparent; border:1px solid var(--line); border-radius:8px; color:var(--grey); padding:9px 0; font-size:13px; font-weight:700;}
+  .rest-dim-presets button:active{border-color:var(--red); color:var(--red);}
   .rest-dim-adjust{display:flex; gap:10px; margin-top:16px;}
   .rest-dim-adjust button{min-width:76px; background:transparent; border:1px solid var(--line); border-radius:8px; color:var(--white); padding:9px 14px; font-size:13px; font-weight:700;}
 
@@ -1069,6 +1090,13 @@
   <div class="rest-dim-adjust">
     <button onclick="event.stopPropagation(); adjustRest(-15)">-15</button>
     <button onclick="event.stopPropagation(); adjustRest(15)">+15</button>
+  </div>
+  <div class="rest-dim-presets">
+    <button onclick="event.stopPropagation(); setRestDuration(60)">1 min</button>
+    <button onclick="event.stopPropagation(); setRestDuration(120)">2 min</button>
+    <button onclick="event.stopPropagation(); setRestDuration(180)">3 min</button>
+    <button onclick="event.stopPropagation(); setRestDuration(240)">4 min</button>
+    <button onclick="event.stopPropagation(); setRestDuration(300)">5 min</button>
   </div>
 </div>
 
@@ -2405,12 +2433,36 @@ function renderLiveWorkout(){
     return;
   }
   if(liveSession.focusedExerciseIndex === -1){
+    const totalSets = liveSession.exercises.reduce((n,ex)=> n + (ex.basicTop ? 1 + (ex.backoffSets ?? 3) : ex.sets.length), 0);
+    const rows = liveSession.exercises.map((ex,i)=>{
+      const last = lastPerformance(ex.name);
+      const lastText = last ? last.sets.map(st=> `${st.w}×${st.r}`).join(' · ') : 'No history yet';
+      const setsText = ex.basicTop
+        ? `Top set + ${ex.backoffSets ?? 3} back-offs`
+        : `${ex.sets.length} ${ex.sets.length===1?'set':'sets'}`;
+      const tag = ex.isTopSetExercise ? '<span class="preview-tag">Top set</span>' : '';
+      return `
+        <div class="preview-ex">
+          <div class="preview-num">${i+1}</div>
+          <div class="preview-info">
+            <div class="preview-name">${ex.name}${tag}</div>
+            <div class="preview-last">${lastText}</div>
+          </div>
+          <div class="preview-sets">${setsText}</div>
+        </div>`;
+    }).join('');
     body.innerHTML = `
-      <div class="warmup-screen">
-        <div class="warmup-icon"><i class="fa-solid fa-fire-flame-curved"></i></div>
-        <h2>Stretching &amp; Warm-up</h2>
-        <p>Take a few minutes to loosen up and get ready before you start lifting.</p>
-        <button class="btn-primary" onclick="startFirstExercise()">First exercise →</button>
+      <div class="preview-screen">
+        <div class="preview-head">
+          <div class="preview-kicker">Today's workout</div>
+          <h2>${liveSession.routine}</h2>
+          <div class="preview-stats">
+            <div><b>${liveSession.exercises.length}</b><span>Exercises</span></div>
+            <div><b>${totalSets}</b><span>Total sets</span></div>
+          </div>
+        </div>
+        <div class="preview-list">${rows}</div>
+        <button class="btn-primary preview-start" onclick="startFirstExercise()">Start workout →</button>
       </div>`;
     updateFooterNav();
     return;
@@ -2705,7 +2757,7 @@ function updateFooterNav(){
     doneBtn.textContent = 'Workout complete';
     doneBtn.disabled = true;
   } else if(idx === -1){
-    doneBtn.textContent = 'Start lifting';
+    doneBtn.textContent = 'Start workout';
     doneBtn.disabled = false;
   } else {
     doneBtn.textContent = 'Set done';
