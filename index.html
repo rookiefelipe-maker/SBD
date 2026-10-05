@@ -585,6 +585,8 @@
   .confirm-actions button{margin-top:0;}
   .rir-options{display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; margin-top:16px;}
   .rir-option{width:100%; margin-top:0;}
+  .spotter-reps{grid-template-columns:repeat(4, minmax(0, 1fr));}
+  #topSetSpotterModal{z-index:130;}
   #topSetProgressionPopup{z-index:140;}
   #topSetProgressionPopup .modal-card{max-width:300px; text-align:center; padding:20px 18px 18px; border-color:rgba(224,38,27,.35);}
   .progress-popup-close{position:absolute; top:8px; right:8px; background:none; border:none; color:var(--grey); font-size:22px; padding:6px 10px; line-height:1;}
@@ -1127,6 +1129,23 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="topSetSpotterModal">
+  <div class="modal-card" style="max-width:340px;">
+    <div class="modal-title">Top set validation</div>
+    <div id="spotterStepAsk">
+      <div class="confirm-message" id="spotterAskMessage"></div>
+      <div class="rir-options">
+        <button class="btn-secondary rir-option" id="spotterYesBtn">Yes</button>
+        <button class="btn-secondary rir-option" id="spotterNoBtn">No</button>
+      </div>
+    </div>
+    <div id="spotterStepReps" style="display:none;">
+      <div class="confirm-message">How many reps did you complete without help?</div>
+      <div class="rir-options spotter-reps" id="spotterRepsOptions"></div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="topSetProgressionPopup">
   <div class="modal-card">
     <button class="progress-popup-close" onclick="closeTopSetProgressionPopup()">×</button>
@@ -1196,6 +1215,40 @@ function applyBarSettingsDefaults(dbObj){
   }
 }
 
+/* One-time migration from the old name-alias system to db.basicAssignments.
+   Every exercise name already present in the data (sessions, routines,
+   catalog) that used to be recognized as Squat / Bench Press / Deadlift by
+   exact name — English or Spanish — gets an explicit entry in
+   db.basicAssignments, unless it already has one (existing assignments are
+   never overwritten). Runs once per database, so later un-flagging an
+   exercise is respected. */
+function migrateBasicAssignments(dbObj){
+  if(!dbObj || dbObj.basicAliasMigrationDone) return;
+  if(!dbObj.basicAssignments) dbObj.basicAssignments = {};
+  const legacy = {
+    squat: ['squat', 'sentadilla', 'sentadillas'],
+    bench: ['bench press', 'bench', 'competition bench', 'competition bench press', 'press banca', 'press de banca', 'banca'],
+    deadlift: ['deadlift', 'peso muerto', 'pesomuerto']
+  };
+  const names = [];
+  (dbObj.exerciseCatalog || []).forEach(n=>{ if(typeof n === 'string') names.push(n); });
+  (dbObj.routines || []).forEach(r=> (r.exercises || []).forEach(e=>{
+    const n = typeof e === 'string' ? e : (e && e.name);
+    if(typeof n === 'string') names.push(n);
+  }));
+  (dbObj.sessions || []).forEach(sess=> (sess.exercises || []).forEach(e=>{
+    if(e && typeof e.name === 'string') names.push(e.name);
+  }));
+  names.forEach(n=>{
+    const norm = normalizeName(n);
+    if(Object.prototype.hasOwnProperty.call(dbObj.basicAssignments, norm)) return;
+    for(const key in legacy){
+      if(legacy[key].includes(norm)){ dbObj.basicAssignments[norm] = key; break; }
+    }
+  });
+  dbObj.basicAliasMigrationDone = true;
+}
+
 function loadDB(){
   const raw = localStorage.getItem(DB_KEY);
   if(raw){
@@ -1204,7 +1257,10 @@ function loadDB(){
       if(!parsed.settings) parsed.settings = { restSeconds: 180 };
       if(!parsed.settings.categories) parsed.settings.categories = [];
       if(!parsed.basicAssignments) parsed.basicAssignments = {};
+      const needsMigration = !parsed.basicAliasMigrationDone;
+      migrateBasicAssignments(parsed);
       applyBarSettingsDefaults(parsed);
+      if(needsMigration) localStorage.setItem(DB_KEY, JSON.stringify(parsed));
       return parsed;
     } catch(e){ /* fallthrough to seed */ }
   }
@@ -1278,6 +1334,7 @@ function seedData(){
         ]},
     ]
   };
+  migrateBasicAssignments(db);
   applyBarSettingsDefaults(db);
   localStorage.setItem(DB_KEY, JSON.stringify(db));
   return db;
@@ -1306,11 +1363,10 @@ function lastPerformance(exerciseName){
   const ex = sessions[0].exercises.find(e=>e.name===exerciseName);
   return { date: sessions[0].date, sets: ex.sets };
 }
-// Basics are matched by exact name only (case/whitespace-insensitive) so
-// variants like "Pause Squat" or "Romanian Deadlift" never count toward the
-// SBD total — only the plain lift itself does. English AND Spanish names are
-// recognized so it doesn't matter which language you log your exercises in;
-// the UI labels themselves always stay in English (BASICS below).
+// Basics are matched by exact normalized name (case/whitespace/accent
+// insensitive) through db.basicAssignments, so variants like "Pause Squat" or
+// "Romanian Deadlift" never count toward the SBD total unless flagged.
+// The UI labels themselves always stay in English (BASICS below).
 function normalizeName(n){
   return n
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'') // strip accents (á->a, etc.)
@@ -1318,11 +1374,6 @@ function normalizeName(n){
     .trim()
     .toLowerCase();
 }
-const BASIC_ALIASES = {
-  squat: ['squat', 'sentadilla', 'sentadillas'],
-  bench: ['bench press', 'bench', 'competition bench', 'competition bench press', 'press banca', 'press de banca', 'banca'],
-  deadlift: ['deadlift', 'peso muerto', 'pesomuerto']
-};
 const BASICS = { squat:'Squat', bench:'Bench Press', deadlift:'Deadlift' };
 /* Which basic (if any) an exercise name counts toward. db.basicAssignments
    is an explicit, user-editable map (normalized name -> 'squat'|'bench'|
@@ -1330,15 +1381,12 @@ const BASICS = { squat:'Squat', bench:'Bench Press', deadlift:'Deadlift' };
    template exercise. It always wins, so renaming an exercise (e.g. to
    "Sentadilla") or using a completely custom name no longer breaks the
    dashboard card — the user just flags it once and it's tracked forever.
-   BASIC_ALIASES is kept only as a fallback for names that were never
-   explicitly flagged, for backwards compatibility with existing data. */
+   It is the single source of truth (legacy name matching is migrated into
+   it once by migrateBasicAssignments). */
 function basicKeyForExercise(name){
   const norm = normalizeName(name);
   if(Object.prototype.hasOwnProperty.call(db.basicAssignments, norm)){
     return db.basicAssignments[norm] || null;
-  }
-  for(const key in BASIC_ALIASES){
-    if(BASIC_ALIASES[key].includes(norm)) return key;
   }
   return null;
 }
@@ -1367,54 +1415,8 @@ function dateOnly(d){ return new Date(d+'T00:00:00'); }
 function daysBetween(a,b){ return Math.round((dateOnly(a)-dateOnly(b))/86400000); }
 
 /* ============= PROGRESSION TRACKING =============
-   For exercises flagged "progression" in their routine, we watch the TOP SET
-   only (isTopSet===true) and compare it week over week using calendar weeks
-   (Monday-start). Reps are always checked against a fixed target of 5 — this
-   is a linear-progression scheme (e.g. 5/3/1-style basics), not a generic
-   "same as last time" comparison. If the same weight × 5 reps shows up on
-   the top set in two consecutive calendar weeks, the exercise is flagged so
-   that on the 3rd week the app nudges the lifter to add weight. */
-const PROGRESSION_TARGET_REPS = 5;
-function weekKeyForDate(dateStr){
-  const d = dateOnly(dateStr);
-  const dow = (d.getDay()+6)%7; // Monday = 0
-  d.setDate(d.getDate()-dow);
-  return localDateStr(d); // Monday of that week, used as the week key
-}
-function topSetWeeklyHistory(exerciseName){
-  const norm = normalizeName(exerciseName);
-  const map = {}; // weekKey -> {weight, reps, date}
-  db.sessions.slice().sort((a,b)=> a.date.localeCompare(b.date)).forEach(s=>{
-    s.exercises.forEach(e=>{
-      if(normalizeName(e.name)!==norm) return;
-      const top = (e.sets||[]).find(x=>x.isTopSet);
-      if(!top || top.w==null || top.r==null) return;
-      // if trained more than once in the same calendar week, keep the latest
-      map[weekKeyForDate(s.date)] = { weight: top.w, reps: top.r, date: s.date };
-    });
-  });
-  return map;
-}
-/* Returns {weight} if this exercise's top set matched the same weight and
-   PROGRESSION_TARGET_REPS reps in the two calendar weeks immediately before
-   referenceDateStr's week — i.e. it's time to add weight this session.
-   Returns null otherwise (no data, gap in weeks, or reps/weight changed). */
-function progressionAlertFor(exerciseName, referenceDateStr){
-  const map = topSetWeeklyHistory(exerciseName);
-  const refWeek = weekKeyForDate(referenceDateStr);
-  const weeks = Object.keys(map).filter(w=> w < refWeek).sort();
-  if(weeks.length < 2) return null;
-  const lastWeek = weeks[weeks.length-1];
-  const prevWeek = weeks[weeks.length-2];
-  const gapDays = Math.round((dateOnly(lastWeek)-dateOnly(prevWeek))/86400000);
-  if(gapDays !== 7) return null; // must be back-to-back calendar weeks, no gaps
-  const a = map[prevWeek], b = map[lastWeek];
-  if(a.weight===b.weight && a.reps===PROGRESSION_TARGET_REPS && b.reps===PROGRESSION_TARGET_REPS){
-    return { weight: a.weight };
-  }
-  return null;
-}
-
+   For exercises flagged "progression" in their routine, Top Singles use the
+   RIR logged after a valid Top Single to decide whether to raise the weight. */
 function topSingleRIRHistory(exerciseName){
   const norm = normalizeName(exerciseName);
   const entries = [];
@@ -1422,7 +1424,7 @@ function topSingleRIRHistory(exerciseName){
     liveSession.exercises.forEach(ex=>{
       if(normalizeName(ex.name)!==norm) return;
       (ex.sets || []).forEach(set=>{
-        if(!set.isTopSet || set.w == null || set.r == null || typeof set.rir !== 'number') return;
+        if(!set.isTopSet || set.failed || set.spotterAssisted || set.w == null || set.r == null || typeof set.rir !== 'number') return;
         entries.push({ weight: set.w, rir: set.rir, date: new Date(liveSession.startedAt).toISOString().slice(0,10) });
       });
     });
@@ -1430,7 +1432,7 @@ function topSingleRIRHistory(exerciseName){
   db.sessions.slice().sort((a,b)=> a.date.localeCompare(b.date)).forEach(s=>{
     s.exercises.forEach(e=>{
       if(normalizeName(e.name)!==norm) return;
-      const top = (e.sets||[]).find(x=>x.isTopSet);
+      const top = (e.sets||[]).find(x=>x.isTopSet && !x.failed && !x.spotterAssisted);
       if(!top || top.w==null || top.r==null || typeof top.rir !== 'number') return;
       entries.push({ weight: top.w, rir: top.rir, date: s.date });
     });
@@ -1452,6 +1454,40 @@ function askTopSetRIR(){
   return new Promise(resolve=>{
     _rirPromptResolve = resolve;
   });
+}
+/* Spotter validation for Top Sets. Resolves to
+   { unassisted:true } or { unassisted:false, reps:n } (n = reps done without
+   help; 0 = none). Single-rep Top Sets skip the "how many" step. */
+let _spotterResolve = null;
+function askTopSetUnassisted(plannedReps){
+  const modal = document.getElementById('topSetSpotterModal');
+  const isSingle = !(plannedReps > 1);
+  document.getElementById('spotterAskMessage').textContent = isSingle
+    ? 'Did you complete the rep without help?'
+    : 'Did you complete all reps without help?';
+  document.getElementById('spotterStepAsk').style.display = '';
+  document.getElementById('spotterStepReps').style.display = 'none';
+  const opts = document.getElementById('spotterRepsOptions');
+  opts.innerHTML = '';
+  for(let n=0; n<plannedReps; n++){
+    const b = document.createElement('button');
+    b.className = 'btn-secondary rir-option';
+    b.textContent = n;
+    b.onclick = ()=> _answerSpotter({ unassisted:false, reps:n });
+    opts.appendChild(b);
+  }
+  document.getElementById('spotterYesBtn').onclick = ()=> _answerSpotter({ unassisted:true });
+  document.getElementById('spotterNoBtn').onclick = ()=>{
+    if(isSingle){ _answerSpotter({ unassisted:false, reps:0 }); return; }
+    document.getElementById('spotterStepAsk').style.display = 'none';
+    document.getElementById('spotterStepReps').style.display = '';
+  };
+  modal.classList.add('active');
+  return new Promise(resolve=>{ _spotterResolve = resolve; });
+}
+function _answerSpotter(result){
+  document.getElementById('topSetSpotterModal').classList.remove('active');
+  if(_spotterResolve){ _spotterResolve(result); _spotterResolve = null; }
 }
 function closeTopSetProgressionPopup(){
   const modal = document.getElementById('topSetProgressionPopup');
@@ -1487,12 +1523,12 @@ document.getElementById('rirPromptModal').addEventListener('click', (e)=>{
   if(e.target.id === 'rirPromptModal') _answerTopSetRIR(0);
 });
 
-function toast(msg){
+function toast(msg, ms=1800){
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
   clearTimeout(t._h);
-  t._h = setTimeout(()=> t.classList.remove('show'), 1800);
+  t._h = setTimeout(()=> t.classList.remove('show'), ms);
 }
 
 /* App-styled confirm dialog — replaces native confirm().
@@ -2394,7 +2430,7 @@ function renderResumeSummaryList(){
   }
   liveSession.exercises.forEach((ex, idx)=>{
     const totalSets = ex.sets.length;
-    const doneSets = ex.sets.filter(set=> set.w != null && set.r != null && set.w > 0 && set.r > 0).length;
+    const doneSets = ex.sets.filter(set=> !set.failed && set.w != null && set.r != null && set.w > 0 && set.r > 0).length;
     const isDone = totalSets > 0 && doneSets === totalSets;
     const isCurrent = idx === liveSession.focusedExerciseIndex;
     const row = document.createElement('div');
@@ -2574,14 +2610,9 @@ function renderSets(exIdx){
   const wrap = document.getElementById('sets-'+exIdx);
   wrap.innerHTML = '';
   const ex = liveSession.exercises[exIdx];
-  const singleRepRIRAlert = ex.isProgressionExercise && (ex.topReps || 1) === 1 && ex.basicTop
+  const activeProgressionAlert = ex.isProgressionExercise && (ex.topReps || 1) === 1 && ex.basicTop
     ? topSingleRIRProgressionAlertFor(ex.name)
     : null;
-  // If this exercise is flagged for progression and the same weight × 5 reps
-  // hit the top set two calendar weeks running, the top-set row blinks red
-  // instead of sitting on the usual fixed red-dim background.
-  const progAlert = ex.isProgressionExercise && !singleRepRIRAlert ? progressionAlertFor(ex.name, todayStr()) : null;
-  const activeProgressionAlert = singleRepRIRAlert || progAlert;
 
   const header = document.createElement('div');
   header.className = 'set-table-header';
@@ -2595,7 +2626,7 @@ function renderSets(exIdx){
     // this set, stop blinking — a lone weight typed in (with reps still
     // empty) shouldn't be enough to silence the alert, since it could be an
     // accidental keystroke and not a completed set.
-    const alreadyProgressed = activeProgressionAlert && set.w!=null && set.w > activeProgressionAlert.weight && set.r!=null && set.r > 0;
+    const alreadyProgressed = activeProgressionAlert && set.w!=null && set.w > activeProgressionAlert.weight && set.r!=null && set.r > 0 && !set.failed;
     const blink = set.isTopSet && activeProgressionAlert && !alreadyProgressed ? ' progression-alert' : '';
     row.className = 'set-row' + (set.isTopSet ? ' is-topset' : '') + (set.isWarmup ? ' is-warmup' : '') + blink;
     if(!set.isWarmup) workingNum++;
@@ -2674,6 +2705,11 @@ function toggleSetDone(exIdx, setIdx){
   const set = liveSession.exercises[exIdx].sets[setIdx];
   if(!set.done && topSetMissingData(exIdx, set)) return;
   set.done = !set.done;
+  if(!set.done && set.plannedR != null){
+    // Undoing a spotter-validated Top Set restores the originally entered reps.
+    set.r = set.plannedR;
+    delete set.plannedR; delete set.failed; delete set.spotterAssisted; delete set.validReps;
+  }
   saveActiveSession();
   renderSets(exIdx);
   if(set.done) handleSetCompleted(exIdx, set);
@@ -2682,17 +2718,52 @@ function toggleSetDone(exIdx, setIdx){
    used everywhere else) drives the backoff sets. Generated only once; if the
    top set is re-completed after a correction, backoffs not yet done are
    recalculated instead of duplicated. */
-function generateBackoffSets(exIdx, topSet){
+/* Most recent valid Top Set (weight x reps) of this exercise from history.
+   Failed/assisted attempts are never stored as sets, so every stored Top Set
+   with weight and reps is valid. Used as the e1RM reference when today's
+   single was assisted. */
+function lastValidTopSetRef(exerciseName){
+  const norm = normalizeName(exerciseName);
+  const isValid = st=> st && !st.failed && !st.spotterAssisted && !st.isWarmup && !st.isBackoff
+    && st.w > 0 && st.r > 0 && Number.isFinite(epley1RM(st.w, st.r));
+  // Real saved history only (previous sessions), most recent first.
+  const sessions = (db.sessions||[]).map((x,i)=>({x,i})).sort((a,b)=> (b.x.date||'').localeCompare(a.x.date||'') || b.i - a.i);
+  // Most recent valid Top Set of the same exercise (matched by name only)
+  // that satisfies repsOk. Within a session, the highest e1RM wins.
+  const findRef = repsOk=>{
+    for(const {x} of sessions){
+      let best = null;
+      for(const e of (x.exercises||[])){
+        if(!e || typeof e.name !== 'string' || normalizeName(e.name) !== norm) continue;
+        for(const st of (e.sets||[])){
+          if(!st.isTopSet || !isValid(st) || !repsOk(st.r)) continue;
+          const e1 = epley1RM(st.w, st.r);
+          if(!best || e1 >= best.e1) best = { w: st.w, r: st.r, e1 };
+        }
+      }
+      if(best) return { w: best.w, r: best.r };
+    }
+    return null;
+  };
+  // Top Single first; if none exists, latest valid Top Set of 2+ reps.
+  return findRef(r=> r === 1) || findRef(r=> r >= 2);
+}
+/* refSet (optional) is the set whose weight x reps drives the e1RM; it
+   defaults to the completed top set itself. */
+function generateBackoffSets(exIdx, topSet, refSet, overrideW){
   const ex = liveSession.exercises[exIdx];
   if(!ex.basicTop || !(ex.backoffSets > 0)) return;
-  if(!(topSet.w > 0) || !(topSet.r > 0)) return;
+  refSet = refSet || topSet;
+  if(!(refSet.w > 0) || !(refSet.r > 0)) return;
   // Top sets are assumed to be ~RPE 8. Standard RPE 8 %1RM table by reps (1-10).
   const RPE8_PCT = [0.92, 0.89, 0.86, 0.84, 0.81, 0.79, 0.76, 0.74, 0.71, 0.68];
-  const pct = RPE8_PCT[Math.min(Math.round(topSet.r), RPE8_PCT.length) - 1];
-  const e1rm = topSet.w / pct;
+  const pct = RPE8_PCT[Math.min(Math.round(refSet.r), RPE8_PCT.length) - 1];
+  const e1rm = refSet.w / pct;
   const BACKOFF_REPS = 5, BACKOFF_PCT = 0.725;
   let w = Math.round((e1rm * BACKOFF_PCT) / 5) * 5;
-  if(w > topSet.w) w = topSet.w;
+  if(w > refSet.w) w = refSet.w;
+  // Fallback (no valid reference): weight comes pre-computed from the caller.
+  if(overrideW != null) w = overrideW;
   if(ex.backoffGenerated){
     ex.sets.forEach(s=>{ if(s.isBackoff && !s.done) s.w = w; });
     return;
@@ -2714,17 +2785,63 @@ function topSetMissingData(exIdx, set){
 }
 async function handleSetCompleted(exIdx, doneSet){
   const ex = liveSession.exercises[exIdx];
-  if(doneSet && doneSet.isTopSet && ex.basicTop && ex.isProgressionExercise && (ex.topReps || 1) === 1){
+  // Spotter validation: only unassisted reps count. The real number of reps
+  // replaces the entered ones, so e1RM, backoffs and history all use it.
+  let topSetFailed = false;
+  if(doneSet && doneSet.isTopSet && !doneSet.isWarmup && ex.basicTop && doneSet.plannedR == null){
+    const planned = doneSet.r;
+    const answer = await askTopSetUnassisted(planned);
+    if(!answer.unassisted){
+      doneSet.plannedR = planned;
+      doneSet.spotterAssisted = true;
+      doneSet.validReps = answer.reps; // reps actually done without help
+      delete doneSet.rir;
+      if(answer.reps <= 0 && planned === 1 && (ex.topReps || 1) === 1){
+        // Assisted Top Single: keep the programmed 1 rep visible; the 0 valid
+        // reps live only in validReps/failed.
+        doneSet.failed = true; topSetFailed = true;
+      } else {
+        doneSet.r = answer.reps;
+        if(answer.reps <= 0){ doneSet.failed = true; topSetFailed = true; }
+      }
+      saveActiveSession();
+      renderSets(exIdx);
+    }
+  } else if(doneSet && doneSet.failed){
+    topSetFailed = true;
+  }
+  if(!topSetFailed && doneSet && doneSet.isTopSet && ex.basicTop && ex.isProgressionExercise && (ex.topReps || 1) === 1){
     const rirAnswer = await askTopSetRIR();
     doneSet.rir = Number.isFinite(rirAnswer) ? Math.max(0, rirAnswer) : 0;
     saveActiveSession();
   }
   // Generate backoffs right away (before the "exercise done?" check below),
   // whichever control completed the top set (row check or footer button).
-  if(doneSet && doneSet.isTopSet && ex.basicTop){
+  if(!topSetFailed && doneSet && doneSet.isTopSet && ex.basicTop){
     generateBackoffSets(exIdx, doneSet);
     saveActiveSession();
     renderSets(exIdx);
+  } else if(topSetFailed && doneSet && doneSet.isTopSet && ex.basicTop
+            && doneSet.plannedR === 1 && (ex.topReps || 1) === 1){
+    // Assisted Top Single: the attempt stays failed, but the backoffs still
+    // get generated from this exercise's latest valid e1RM in history.
+    const ref = lastValidTopSetRef(ex.name);
+    if(ref){
+      generateBackoffSets(exIdx, doneSet, ref);
+      saveActiveSession();
+      renderSets(exIdx);
+    } else {
+      // No valid reference at all: fallback to 80% of the assisted/failed
+      // single's weight, rounded to 5 kg. The attempt itself stays Failed (assisted).
+      const fallbackW = Math.round((doneSet.w * 0.8) / 5) * 5;
+      if(doneSet.w > 0 && fallbackW > 0){
+        generateBackoffSets(exIdx, doneSet, doneSet, fallbackW);
+        saveActiveSession();
+        renderSets(exIdx);
+      } else {
+        toast('No valid reference found to calculate Backoff Sets automatically', 4500);
+      }
+    }
   }
   // Give the user 5 seconds to start the rest timer manually. If they don't,
   // it starts itself and lets them know with a notification + alert sound.
@@ -3030,11 +3147,14 @@ async function finishWorkout(){
   const validExercises = liveSession.exercises
     .map(ex=> ({
       name: ex.name,
-      sets: ex.sets.filter(s=> s.w!=null && s.r!=null && s.w>0 && s.r>0),
+      sets: ex.sets.filter(s=> !s.failed && s.w!=null && s.r!=null && s.w>0 && s.r>0),
       supersetGroup: ex.supersetGroup, supersetRole: ex.supersetRole,
-      isTopSetExercise: !!ex.isTopSetExercise
+      isTopSetExercise: !!ex.isTopSetExercise,
+      // Top sets that needed a spotter for every rep: logged as failed, never as valid sets.
+      failedTopSets: ex.sets.filter(s=> s.failed && s.w>0).map(s=> ({ w:s.w, plannedReps:s.plannedR, assisted:true }))
     }))
-    .filter(ex=> ex.sets.length>0);
+    .map(ex=>{ if(!ex.failedTopSets.length) delete ex.failedTopSets; return ex; })
+    .filter(ex=> ex.sets.length>0 || (ex.failedTopSets && ex.failedTopSets.length>0));
   if(!validExercises.length){
     if(!await appConfirm('No sets logged. Finish anyway without saving?', {title:'No sets logged', confirmText:'Finish anyway'})) return;
     clearTimeout(pendingAutoRestTimeout);
@@ -3639,7 +3759,13 @@ function openSessionDetail(sessionId){
         <span style="flex:1.4; text-align:center;">${set.w} kg</span>
         <span style="flex:1; text-align:center; color:var(--grey);">${set.r} reps</span>
       </div>`).join('');
-    block.innerHTML = `<div class="ex-block-top"><div>${supersetTag}${topSetTag}<h3>${ex.name}</h3></div></div>${rows}`;
+    const failedRows = (ex.failedTopSets||[]).map(f=> `
+      <div class="set-row is-topset" style="margin-bottom:6px; opacity:.7;">
+        <span class="idx">★</span>
+        <span style="flex:1.4; text-align:center;">${f.w} kg</span>
+        <span style="flex:1; text-align:center; color:var(--red);">Failed (assisted)</span>
+      </div>`).join('');
+    block.innerHTML = `<div class="ex-block-top"><div>${supersetTag}${topSetTag}<h3>${ex.name}</h3></div></div>${failedRows}${rows}`;
     body.appendChild(block);
   });
   document.getElementById('sessionDetailOverlay').classList.add('active');
@@ -4155,6 +4281,7 @@ async function resetAllData(){
   if(!await appConfirm('Last confirmation: this cannot be undone. Delete everything?', {title:'Are you sure?', confirmText:'Delete everything'})) return;
   localStorage.removeItem(DB_KEY);
   db = { settings:{restSeconds:180, categories:[]}, goals:{squat:0,bench:0,deadlift:0}, basicAssignments:{}, exerciseCatalog:[], routines:[], sessions:[] };
+  migrateBasicAssignments(db);
   applyBarSettingsDefaults(db);
   saveDB();
   closeOverlay('settingsOverlay');
@@ -4271,6 +4398,8 @@ async function restoreBackup(){
       if(!parsed.sessions || !parsed.routines){ toast('Invalid file'); return; }
       if(!parsed.settings) parsed.settings = { restSeconds: 180 };
       if(!parsed.settings.categories) parsed.settings.categories = [];
+      if(!parsed.basicAssignments) parsed.basicAssignments = {};
+      migrateBasicAssignments(parsed);
       applyBarSettingsDefaults(parsed);
       db = parsed;
       saveDB();
