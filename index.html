@@ -104,7 +104,7 @@
   .streak-row{display:flex; gap:20px; margin-top:12px;}
   .streak{font-size:11px; color:var(--grey);}
   .streak b{color:var(--white); font-size:18px; display:block; font-weight:800;}
-  .hm-yearly-btn{background:none; border:1px solid var(--line); border-radius:999px; color:var(--grey); font-size:10px; letter-spacing:1px; text-transform:uppercase; padding:4px 10px; cursor:pointer;}
+  .hm-yearly-btn{background:none; border:1px solid var(--line); border-radius:999px; color:var(--red); font-size:10px; letter-spacing:1px; text-transform:uppercase; padding:4px 10px; cursor:pointer;}
   .hm-yearly-btn:active{border-color:var(--red); color:var(--white);}
   .hm-yearly-btn i{margin-right:4px; font-size:9px;}
   .year-nav{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px;}
@@ -516,6 +516,16 @@
   .chip.selected-plate{background:var(--green); border-color:var(--green); color:var(--black); font-weight:700;}
 
   /* Loaded bar visual */
+  .onerm-hero{text-align:center; margin:4px 0 14px;}
+  .onerm-hero .val{font-size:40px; font-weight:900; color:var(--red); line-height:1.1;}
+  .onerm-hero .val small{font-size:14px; color:var(--grey); font-weight:400;}
+  .onerm-hero .sub{font-size:11px; color:var(--grey); text-transform:uppercase; letter-spacing:0.5px; margin-top:2px;}
+  .onerm-alt{display:flex; justify-content:space-between; font-size:12px; color:var(--grey); border-top:1px solid var(--line); padding:8px 0;}
+  .onerm-alt b{color:var(--white);}
+  .onerm-table{width:100%; border-collapse:collapse; margin-top:6px; font-size:13px;}
+  .onerm-table td{padding:6px 0; border-top:1px solid var(--line);}
+  .onerm-table td:first-child{color:var(--grey);}
+  .onerm-table td:last-child{text-align:right; font-weight:700;}
   .loaded-bar-summary{display:flex; align-items:baseline; justify-content:space-between; margin:4px 0 16px;}
   .loaded-bar-summary .achieved{font-size:26px; font-weight:900;}
   .loaded-bar-summary .achieved small{font-size:13px; color:var(--grey); font-weight:400;}
@@ -863,6 +873,10 @@
   <i class="fa-solid fa-dumbbell" style="color: rgb(230, 12, 12);"></i> Loaded bar
 </button>
 
+<button class="action-menu-btn" onclick="closeWorkoutMenu(); openOneRM();">
+  <i class="fa-solid fa-calculator" style="color: rgb(230, 12, 12);"></i> 1RM calculator
+</button>
+
 <button class="action-menu-btn" id="updateRoutineBtn" onclick="closeWorkoutMenu(); updateRoutineFromWorkout();">
   <i class="fa-regular fa-floppy-disk" style="color: rgb(230, 12, 12);"></i> Update routine
 </button>
@@ -876,6 +890,34 @@
     <button class="modal-close" onclick="closeResumeSummary()">×</button>
     <div class="modal-title">Resume</div>
     <div id="resumeSummaryList"></div>
+  </div>
+</div>
+
+<!-- POPUP: 1RM calculator -->
+<div class="modal-backdrop" id="oneRMModal">
+  <div class="modal-card" style="max-width:340px;">
+    <button class="modal-close" onclick="closeOneRM()">×</button>
+    <div class="modal-title">1RM calculator</div>
+    <div style="display:flex; gap:10px;">
+      <div class="field" style="flex:1; min-width:0;">
+        <label>Weight (kg)</label>
+        <input type="number" id="oneRMWeightInput" inputmode="decimal" step="0.5" min="0" placeholder="e.g. 100" oninput="renderOneRMResult()">
+      </div>
+      <div class="field" style="flex:1; min-width:0;">
+        <label>Reps</label>
+        <input type="number" id="oneRMRepsInput" inputmode="numeric" step="1" min="1" max="30" placeholder="e.g. 5" oninput="renderOneRMResult()">
+      </div>
+    </div>
+    <div class="field">
+      <label>RPE (optional)</label>
+      <select id="oneRMRpeInput" onchange="renderOneRMResult()">
+        <option value="">—</option>
+        <option value="10">10</option><option value="9.5">9.5</option><option value="9">9</option>
+        <option value="8.5">8.5</option><option value="8">8</option><option value="7.5">7.5</option>
+        <option value="7">7</option><option value="6.5">6.5</option><option value="6">6</option>
+      </select>
+    </div>
+    <div id="oneRMResult"></div>
   </div>
 </div>
 
@@ -1438,12 +1480,99 @@ function prForBasic(key){
   if(!sets.length) return null;
   return sets.reduce((a,b)=> b.weight > a.weight ? b : a);
 }
-/* Estimated 1-rep max via the Epley formula: w * (1 + r/30).
-   It's the standard quick estimate for a set of straight reps and good
-   enough for tracking e1RM trends over time. */
-function epley1RM(w, r){
-  if(w==null || r==null) return null;
-  return w * (1 + r/30);
+// ======================================================
+// 1RM / e1RM
+// ======================================================
+
+// Epley tradicional.
+// Mantener para la calculadora clásica de 1RM.
+function epley1RM(weight, reps) {
+  if (weight == null || reps == null || reps < 1) return null;
+
+  // Si realmente levantó 1 repetición, ese peso es un 1RM observado.
+  if (reps === 1) return weight;
+
+  return weight * (1 + reps / 30);
+}
+
+
+// Brzycki tradicional.
+// Puede mantenerse como estimación secundaria.
+function brzycki1RM(weight, reps) {
+  if (weight == null || reps == null || reps < 1) return null;
+
+  if (reps === 1) return weight;
+
+  // Evitar valores inválidos.
+  if (reps >= 37) return null;
+
+  return weight * 36 / (37 - reps);
+}
+
+
+// ======================================================
+// e1RM ajustado por RPE para powerlifting
+// ======================================================
+
+// Porcentaje aproximado del 1RM para cada combinación
+// de reps y RPE.
+//
+// Ejemplo:
+// 1 rep @8 = 92%
+// 5 reps @8 = 81%
+const RPE_PERCENT_TABLE = {
+  10:  { 1: 1.00,  2: 0.955, 3: 0.922, 4: 0.892, 5: 0.863, 6: 0.837, 7: 0.811, 8: 0.786, 9: 0.762, 10: 0.739 },
+  9.5: { 1: 0.978, 2: 0.939, 3: 0.907, 4: 0.878, 5: 0.850, 6: 0.824, 7: 0.799, 8: 0.774, 9: 0.751, 10: 0.723 },
+  9:   { 1: 0.955, 2: 0.922, 3: 0.892, 4: 0.863, 5: 0.837, 6: 0.811, 7: 0.786, 8: 0.762, 9: 0.739, 10: 0.707 },
+  8.5: { 1: 0.939, 2: 0.907, 3: 0.878, 4: 0.850, 5: 0.824, 6: 0.799, 7: 0.774, 8: 0.751, 9: 0.723, 10: 0.680 },
+  8:   { 1: 0.922, 2: 0.892, 3: 0.863, 4: 0.837, 5: 0.811, 6: 0.786, 7: 0.762, 8: 0.739, 9: 0.707, 10: 0.653 },
+  7.5: { 1: 0.907, 2: 0.878, 3: 0.850, 4: 0.824, 5: 0.799, 6: 0.774, 7: 0.751, 8: 0.723, 9: 0.680, 10: 0.626 },
+  7:   { 1: 0.892, 2: 0.863, 3: 0.837, 4: 0.811, 5: 0.786, 6: 0.762, 7: 0.739, 8: 0.707, 9: 0.653, 10: 0.599 },
+  6.5: { 1: 0.878, 2: 0.850, 3: 0.824, 4: 0.799, 5: 0.774, 6: 0.751, 7: 0.723, 8: 0.680, 9: 0.626, 10: 0.572 },
+  6:   { 1: 0.863, 2: 0.837, 3: 0.811, 4: 0.786, 5: 0.762, 6: 0.739, 7: 0.707, 8: 0.653, 9: 0.599, 10: 0.544 }
+};
+
+
+// Calcula e1RM usando reps + RPE.
+function rpeEstimated1RM(weight, reps, rpe) {
+  if (
+    weight == null ||
+    reps == null ||
+    rpe == null ||
+    reps < 1 ||
+    reps > 10
+  ) {
+    return null;
+  }
+
+  const row = RPE_PERCENT_TABLE[rpe];
+
+  if (!row || !row[reps]) return null;
+
+  return weight / row[reps];
+}
+
+
+// ======================================================
+// Función general
+// ======================================================
+
+function calculateStrengthEstimate(weight, reps, rpe = null) {
+  const epley = epley1RM(weight, reps);
+  const brzycki = brzycki1RM(weight, reps);
+
+  // Solo calcular RPE e1RM cuando tenemos RPE válido
+  // y el set está entre 1 y 10 reps.
+  const rpeE1RM =
+    rpe != null && reps <= 10
+      ? rpeEstimated1RM(weight, reps, rpe)
+      : null;
+
+  return {
+    epley,
+    brzycki,
+    rpeE1RM
+  };
 }
 function fmt1RM(v){
   return (Math.round(v*10)/10).toString().replace(/\.0$/,'');
@@ -4275,6 +4404,50 @@ function saveBarSettings(){
   }
   saveDB();
   toast('Barbell & plates saved');
+}
+
+/* ================= 1RM CALCULATOR ================= */
+function openOneRM(){
+  const w = document.getElementById('oneRMWeightInput');
+  document.getElementById('oneRMRepsInput').value = '';
+  document.getElementById('oneRMRpeInput').value = '';
+  w.value = '';
+  document.getElementById('oneRMResult').innerHTML = '';
+  document.getElementById('oneRMModal').classList.add('active');
+  setTimeout(()=> w.focus(), 50);
+}
+function closeOneRM(){ document.getElementById('oneRMModal').classList.remove('active'); }
+function renderOneRMResult(){
+  const w = parseFloat(document.getElementById('oneRMWeightInput').value);
+  const r = parseInt(document.getElementById('oneRMRepsInput').value, 10);
+  const rpeRaw = document.getElementById('oneRMRpeInput').value;
+  const rpe = rpeRaw === '' ? null : parseFloat(rpeRaw);
+  const el = document.getElementById('oneRMResult');
+  if(!(w>0) || !(r>=1)){ el.innerHTML = ''; return; }
+  if(r>30){
+    el.innerHTML = '<small class="hint">Enter between 1 and 30 reps.</small>';
+    return;
+  }
+  const est = calculateStrengthEstimate(w, r, rpe);
+  // With a valid RPE the RPE-adjusted e1RM is the headline; otherwise Epley.
+  const main = est.rpeE1RM != null ? est.rpeE1RM : est.epley;
+  const label = est.rpeE1RM != null ? 'Estimated 1RM @RPE ' + rpe : 'Estimated 1RM';
+  const rows = [95,90,85,80,75,70,65,60].map(p=>
+    `<tr><td>${p}%</td><td>${fmt1RM(main*p/100)} kg</td></tr>`).join('');
+  const alt = (name, v) => v == null ? '' :
+    `<div class="onerm-alt"><span>${name}</span><b>${fmt1RM(v)} kg</b></div>`;
+  let hint = '';
+  if(rpe != null && r > 10) hint = 'RPE estimate only works up to 10 reps.';
+  else if(r > 12) hint = 'Above ~12 reps the estimate becomes less accurate.';
+  el.innerHTML = `
+    <div class="onerm-hero">
+      <div class="val">${fmt1RM(main)}<small> kg</small></div>
+      <div class="sub">${label}</div>
+    </div>
+    ${est.rpeE1RM != null ? alt('Epley', est.epley) : ''}
+    ${alt('Brzycki', est.brzycki)}
+    <table class="onerm-table">${rows}</table>
+    ${hint ? `<small class="hint">${hint}</small>` : ''}`;
 }
 
 /* ================= LOADED BAR CALCULATOR ================= */
