@@ -296,6 +296,15 @@
     font-size:10px; color:var(--blue); text-transform:uppercase; letter-spacing:.5px; font-weight:700; margin-bottom:6px; margin-right:6px;
   }
 
+  .target-tag{
+    display:inline-flex; align-items:center; background:var(--charcoal); border:1px solid var(--gold); border-radius:20px; padding:4px 10px;
+    font-size:11px; color:var(--gold); letter-spacing:0.3px; font-weight:700; margin-bottom:6px; margin-right:6px;
+  }
+  .preview-target{font-size:11px; color:var(--gold); font-weight:700; margin-top:3px;}
+  .draft-target-row{display:flex; gap:10px; margin-top:8px;}
+  .draft-target-field{flex:1; display:flex; align-items:center; justify-content:space-between; gap:10px;}
+  .draft-target-field span{font-size:11px; color:var(--grey); text-transform:uppercase; letter-spacing:.5px;}
+  .draft-target-field input, .draft-target-field select{width:80px; padding:8px 10px; text-align:center;}
   .topset-tag{
     display:inline-flex; align-items:center; background:var(--charcoal); border:1px solid var(--line); border-radius:20px; padding:4px 10px;
     font-size:10px; color:var(--red); text-transform:uppercase; letter-spacing:0.5px; font-weight:700; margin-bottom:6px; margin-right:6px;
@@ -2124,9 +2133,9 @@ function normalizeRoutineExercises(r){
   const topNames = r.topSetExercises || [];
   return (r.exercises || []).map(e=>{
     if(typeof e === 'string'){
-      return { name: e, sets: 1, topSet: topNames.includes(e), progression: false, topReps: 1, backoffSets: 3 };
+      return { name: e, sets: 1, topSet: topNames.includes(e), progression: false, topReps: 1, backoffSets: 3, targetReps: null, targetRpe: null };
     }
-    return { name: e.name, sets: e.sets || 1, topSet: !!e.topSet, progression: !!e.progression, topReps: e.topReps || 1, backoffSets: (e.backoffSets ?? 3) };
+    return { name: e.name, sets: e.sets || 1, topSet: !!e.topSet, progression: !!e.progression, topReps: e.topReps || 1, backoffSets: (e.backoffSets ?? 3), targetReps: e.targetReps || null, targetRpe: e.targetRpe || null };
   });
 }
 
@@ -2160,7 +2169,7 @@ function renderExerciseCatalogDatalist(){
   dl.innerHTML = db.exerciseCatalog.map(n=> `<option value="${n.replace(/"/g,'&quot;')}">`).join('');
 }
 function addDraftExercise(){
-  routineDraftExercises.push({ name:'', sets:3, topSet:false, progression:false, topReps:1, backoffSets:3, basicKey:null, _origName:'' });
+  routineDraftExercises.push({ name:'', sets:3, topSet:false, progression:false, topReps:1, backoffSets:3, targetReps:null, targetRpe:null, basicKey:null, _origName:'' });
   renderRoutineDraftExercises();
   setTimeout(()=>{
     const inputs = document.querySelectorAll('#routineExercisesWrap .draft-ex-name');
@@ -2229,6 +2238,14 @@ function toggleDraftProgression(idx){
   ex.progression = !ex.progression;
   renderRoutineDraftExercises();
 }
+function setDraftTargetReps(idx, value){
+  const n = parseInt(value, 10);
+  routineDraftExercises[idx].targetReps = (isNaN(n) || n < 1) ? null : Math.min(n, 99);
+}
+function setDraftTargetRpe(idx, value){
+  const n = parseFloat(value);
+  routineDraftExercises[idx].targetRpe = (isNaN(n) || n < 1) ? null : n;
+}
 function renderRoutineDraftExercises(){
   const wrap = document.getElementById('routineExercisesWrap');
   wrap.innerHTML = '';
@@ -2260,6 +2277,20 @@ function renderRoutineDraftExercises(){
           <span style="min-width:18px; text-align:center; font-weight:800; font-size:16px;">${ex.sets}</span>
           <button class="rm-set" style="font-size:20px;" onclick="changeDraftSets(${idx},1)">+</button>
         </div>
+      </div>
+      <div class="draft-target-row">
+        ${(ex.topSet && ex.basicKey) ? '' : `
+        <label class="draft-target-field">
+          <span>Reps</span>
+          <input type="number" inputmode="numeric" min="1" max="99" step="1" placeholder="—" value="${ex.targetReps ?? ''}" oninput="setDraftTargetReps(${idx}, this.value)">
+        </label>`}
+        <label class="draft-target-field">
+          <span>RPE</span>
+          <select onchange="setDraftTargetRpe(${idx}, this.value)">
+            <option value="">—</option>
+            ${[6,6.5,7,7.5,8,8.5,9,9.5,10].map(v=> `<option value="${v}" ${ex.targetRpe===v?'selected':''}>${v}</option>`).join('')}
+          </select>
+        </label>
       </div>
       <div class="toggle-row" style="margin-top:6px;">
         <span class="toggle-label">Top Set</span>
@@ -2308,6 +2339,8 @@ function saveRoutine(){
     .map(e=> {
       const o = { name: e.name.trim(), sets: e.sets||1, topSet: !!e.topSet, progression: !!e.topSet && !!e.progression };
       if(e.topSet && e.basicKey){ o.topReps = e.topReps||1; o.backoffSets = e.backoffSets ?? 3; }
+      else if(e.targetReps){ o.targetReps = e.targetReps; }
+      if(e.targetRpe){ o.targetRpe = e.targetRpe; }
       return o;
     })
     .filter(e=> e.name);
@@ -2485,7 +2518,9 @@ function startWorkout(routineId){
       const n = basicTop ? 1 : Math.max(1, ex.sets||1);
       return {
         name: ex.name,
-        sets: Array.from({length: n}, (_,i)=> ({ w:null, r: basicTop ? (ex.topReps||1) : null, isTopSet: !!(ex.topSet && i===0) })),
+        sets: Array.from({length: n}, (_,i)=> ({ w:null, r: basicTop ? (ex.topReps||1) : (ex.targetReps ?? null), isTopSet: !!(ex.topSet && i===0) })),
+        targetReps: ex.targetReps || null,
+        targetRpe: ex.targetRpe || null,
         supersetGroup:null, supersetRole:null,
         isTopSetExercise: ex.topSet,
         isProgressionExercise: !!ex.progression,
@@ -2690,6 +2725,13 @@ function startFirstExercise(){
   updateWorkoutHeader();
   resetWorkoutScrollUI();
 }
+function targetLabel(ex){
+  const reps = ex.basicTop ? (ex.topReps || 1) : ex.targetReps;
+  const parts = [];
+  if(reps) parts.push(`${reps} ${reps===1?'rep':'reps'}`);
+  if(ex.targetRpe) parts.push(`RPE ${ex.targetRpe}`);
+  return parts.join(' @ ');
+}
 function renderLiveWorkout(){
   const body = document.getElementById('liveWorkoutBody');
   body.innerHTML = '';
@@ -2714,6 +2756,7 @@ function renderLiveWorkout(){
           <div class="preview-num">${i+1}</div>
           <div class="preview-info">
             <div class="preview-name">${ex.name}${tag}</div>
+            ${targetLabel(ex) ? `<div class="preview-target">Target: ${targetLabel(ex)}</div>` : ''}
             <div class="preview-last">${lastText}</div>
           </div>
           <div class="preview-sets">${setsText}</div>
@@ -2800,6 +2843,7 @@ function renderLiveWorkout(){
     }
     const topSetTag = ex.isTopSetExercise ? `<div class="topset-tag">★ Top set exercise</div>` : '';
     const progressTag = ex.isProgressionExercise ? `<div class="progress-tag">⬆ Progression</div>` : '';
+    const targetTag = targetLabel(ex) ? `<div class="target-tag">Target: ${targetLabel(ex)}</div>` : '';
 
     block.innerHTML = `
       <div class="ex-block-top">
@@ -2807,6 +2851,7 @@ function renderLiveWorkout(){
           ${supersetTag}
           ${topSetTag}
           ${progressTag}
+          ${targetTag}
           <h3>${ex.name}</h3>
         </div>
         <div class="ex-actions">
@@ -3206,7 +3251,8 @@ async function updateRoutineFromWorkout(){
     sets: Math.max(1, ex.sets.length || 1),
     topSet: !!ex.isTopSetExercise,
     progression: !!ex.isProgressionExercise,
-    ...(ex.basicTop ? { topReps: ex.topReps || 1, backoffSets: ex.backoffSets ?? 3 } : {})
+    ...(ex.basicTop ? { topReps: ex.topReps || 1, backoffSets: ex.backoffSets ?? 3 } : (ex.targetReps ? { targetReps: ex.targetReps } : {})),
+    ...(ex.targetRpe ? { targetRpe: ex.targetRpe } : {})
   }));
   const existing = liveSession.routineId ? db.routines.find(x=>x.id===liveSession.routineId) : null;
   if(existing){
