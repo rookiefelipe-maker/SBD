@@ -2136,9 +2136,9 @@ function normalizeRoutineExercises(r){
   const topNames = r.topSetExercises || [];
   return (r.exercises || []).map(e=>{
     if(typeof e === 'string'){
-      return { name: e, sets: 1, topSet: topNames.includes(e), progression: false, topReps: 1, backoffSets: 3, targetReps: null, targetRpe: null };
+      return { name: e, sets: 1, topSet: topNames.includes(e), progression: false, topReps: 1, backoffSets: 3, targetReps: null, targetRpe: null, weight: null };
     }
-    return { name: e.name, sets: e.sets || 1, topSet: !!e.topSet, progression: !!e.progression, topReps: e.topReps || 1, backoffSets: (e.backoffSets ?? 3), targetReps: e.targetReps || null, targetRpe: e.targetRpe || null };
+    return { name: e.name, sets: e.sets || 1, topSet: !!e.topSet, progression: !!e.progression, topReps: e.topReps || 1, backoffSets: (e.backoffSets ?? 3), targetReps: e.targetReps || null, targetRpe: e.targetRpe || null, weight: e.weight || null };
   });
 }
 
@@ -2172,7 +2172,7 @@ function renderExerciseCatalogDatalist(){
   dl.innerHTML = db.exerciseCatalog.map(n=> `<option value="${n.replace(/"/g,'&quot;')}">`).join('');
 }
 function addDraftExercise(){
-  routineDraftExercises.push({ name:'', sets:3, topSet:false, progression:false, topReps:1, backoffSets:3, targetReps:null, targetRpe:null, basicKey:null, _origName:'' });
+  routineDraftExercises.push({ name:'', sets:3, topSet:false, progression:false, topReps:1, backoffSets:3, targetReps:null, targetRpe:null, weight:null, basicKey:null, _origName:'' });
   renderRoutineDraftExercises();
   setTimeout(()=>{
     const inputs = document.querySelectorAll('#routineExercisesWrap .draft-ex-name');
@@ -2249,6 +2249,10 @@ function setDraftTargetRpe(idx, value){
   const n = parseFloat(value);
   routineDraftExercises[idx].targetRpe = (isNaN(n) || n < 1) ? null : n;
 }
+function setDraftWeight(idx, value){
+  const n = parseFloat(String(value).replace(',', '.'));
+  routineDraftExercises[idx].weight = (isNaN(n) || n <= 0) ? null : Math.min(Math.round(n*100)/100, 1000);
+}
 function renderRoutineDraftExercises(){
   const wrap = document.getElementById('routineExercisesWrap');
   wrap.innerHTML = '';
@@ -2280,6 +2284,12 @@ function renderRoutineDraftExercises(){
           <span style="min-width:18px; text-align:center; font-weight:800; font-size:16px;">${ex.sets}</span>
           <button class="rm-set" style="font-size:20px;" onclick="changeDraftSets(${idx},1)">+</button>
         </div>
+      </div>
+      <div class="draft-target-row">
+        <label class="draft-target-field">
+          <span>${(ex.topSet && ex.basicKey) ? 'Top Set weight (kg)' : 'Weight (kg)'}</span>
+          <input type="number" inputmode="decimal" min="0" max="1000" step="0.5" placeholder="—" value="${ex.weight ?? ''}" oninput="setDraftWeight(${idx}, this.value)">
+        </label>
       </div>
       <div class="draft-target-row">
         ${(ex.topSet && ex.basicKey) ? '' : `
@@ -2344,6 +2354,7 @@ function saveRoutine(){
       if(e.topSet && e.basicKey){ o.topReps = e.topReps||1; o.backoffSets = e.backoffSets ?? 3; }
       else if(e.targetReps){ o.targetReps = e.targetReps; }
       if(e.targetRpe){ o.targetRpe = e.targetRpe; }
+      if(e.weight > 0){ o.weight = e.weight; }
       return o;
     })
     .filter(e=> e.name);
@@ -2521,7 +2532,8 @@ function startWorkout(routineId){
       const n = basicTop ? 1 : Math.max(1, ex.sets||1);
       return {
         name: ex.name,
-        sets: Array.from({length: n}, (_,i)=> ({ w:null, r: basicTop ? (ex.topReps||1) : (ex.targetReps ?? null), isTopSet: !!(ex.topSet && i===0) })),
+        sets: Array.from({length: n}, (_,i)=> ({ w: ex.weight > 0 ? ex.weight : null, r: basicTop ? (ex.topReps||1) : (ex.targetReps ?? null), isTopSet: !!(ex.topSet && i===0) })),
+        weight: ex.weight || null,
         targetReps: ex.targetReps || null,
         targetRpe: ex.targetRpe || null,
         supersetGroup:null, supersetRole:null,
@@ -3255,7 +3267,14 @@ async function updateRoutineFromWorkout(){
     topSet: !!ex.isTopSetExercise,
     progression: !!ex.isProgressionExercise,
     ...(ex.basicTop ? { topReps: ex.topReps || 1, backoffSets: ex.backoffSets ?? 3 } : (ex.targetReps ? { targetReps: ex.targetReps } : {})),
-    ...(ex.targetRpe ? { targetRpe: ex.targetRpe } : {})
+    ...(ex.targetRpe ? { targetRpe: ex.targetRpe } : {}),
+    ...(() => {
+      // Planned load = weight of the first working set (the top set for basic
+      // lifts), falling back to the weight already stored in the template.
+      const first = ex.sets.find(s=> !s.isWarmup && s.w > 0);
+      const w = first ? first.w : ex.weight;
+      return w > 0 ? { weight: w } : {};
+    })()
   }));
   const existing = liveSession.routineId ? db.routines.find(x=>x.id===liveSession.routineId) : null;
   if(existing){
@@ -4746,7 +4765,7 @@ async function restoreBackup(){
    ex       = "Bench Press"  or
               { "name":"Bench Press", "sets":4, "reps":8, "rpe":8,
                 "topSet":true, "topReps":3, "backoffSets":3,
-                "progression":false, "basic":"bench" }
+                "progression":false, "basic":"bench", "weight":100 }
    Days: 0=Mon ... 6=Sun. basic: "squat" | "bench" | "deadlift". */
 const _PG_DAYS = { mon:0, monday:0, lun:0, lunes:0, tue:1, tuesday:1, mar:1, martes:1, wed:2, wednesday:2, mie:2, miercoles:2,
   thu:3, thursday:3, jue:3, jueves:3, fri:4, friday:4, vie:4, viernes:4, sat:5, saturday:5, sab:5, sabado:5, sun:6, sunday:6, dom:6, domingo:6 };
@@ -4797,6 +4816,8 @@ function parseProgramme(data){
         o.backoffSets = Math.round(_pgNum(src.backoffSets, 0, 20) ?? 3);
       } else if(reps){ o.targetReps = Math.round(reps); }
       if(rpe) o.targetRpe = rpe;
+      const weight = _pgNum(src.weight ?? src.load ?? src.kg, 0.1, 1000);
+      if(weight) o.weight = Math.round(weight*100)/100;
       if(_pgBasic(src.basic)) basics[normalizeName(exName)] = _pgBasic(src.basic);
       exercises.push(o);
     });
@@ -4841,12 +4862,12 @@ function downloadProgrammeTemplate(){
     programme: 'My programme',
     routines: [
       { name: 'Day 1 - Squat', days: ['Mon'], exercises: [
-        { name: 'Squat', basic: 'squat', topSet: true, topReps: 3, backoffSets: 3, progression: true },
-        { name: 'Leg Press', sets: 3, reps: 10, rpe: 8 },
+        { name: 'Squat', basic: 'squat', topSet: true, topReps: 3, backoffSets: 3, progression: true, weight: 120 },
+        { name: 'Leg Press', sets: 3, reps: 10, rpe: 8, weight: 180 },
         'Leg Curl'
       ]},
       { name: 'Day 2 - Bench', days: ['Wed'], exercises: [
-        { name: 'Bench Press', basic: 'bench', topSet: true, topReps: 5, backoffSets: 3 },
+        { name: 'Bench Press', basic: 'bench', topSet: true, topReps: 5, backoffSets: 3, weight: 90 },
         { name: 'Overhead Press', sets: 3, reps: 8 }
       ]}
     ]
