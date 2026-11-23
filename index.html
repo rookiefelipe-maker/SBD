@@ -780,6 +780,9 @@
     <h2 class="title">Your routines</h2>
     <div id="routineList"></div>
     <button class="btn-ghost" onclick="openRoutineEditor()">+ New routine</button>
+    <button class="btn-ghost" onclick="document.getElementById('programmeFile').click()"><i class="fa-solid fa-file-arrow-up" style="margin-right:6px;"></i>Upload Programme (.json)</button>
+    <input type="file" id="programmeFile" accept=".json,application/json" style="display:none" onchange="handleProgrammeFile(this)">
+    <button class="btn-ghost" style="border-style:solid; border-color:transparent; font-size:11px; margin-top:0;" onclick="downloadProgrammeTemplate()">Download JSON template</button>
   </section>
 
   <!-- STATS -->
@@ -4733,6 +4736,127 @@ async function restoreBackup(){
     }
   };
   reader.readAsText(file);
+}
+
+/* ================= PROGRAMME IMPORT (JSON) ================= */
+/* Accepted shapes (all map onto db.routines, same shape saveRoutine() builds):
+   { "programme":"name", "routines":[ {...routine}, ... ] }
+   [ {...routine}, ... ]            or a single {...routine}
+   routine  = { "name":"Push", "days":["Mon","Thu"] | [0,3], "exercises":[ ex, ... ] }
+   ex       = "Bench Press"  or
+              { "name":"Bench Press", "sets":4, "reps":8, "rpe":8,
+                "topSet":true, "topReps":3, "backoffSets":3,
+                "progression":false, "basic":"bench" }
+   Days: 0=Mon ... 6=Sun. basic: "squat" | "bench" | "deadlift". */
+const _PG_DAYS = { mon:0, monday:0, lun:0, lunes:0, tue:1, tuesday:1, mar:1, martes:1, wed:2, wednesday:2, mie:2, miercoles:2,
+  thu:3, thursday:3, jue:3, jueves:3, fri:4, friday:4, vie:4, viernes:4, sat:5, saturday:5, sab:5, sabado:5, sun:6, sunday:6, dom:6, domingo:6 };
+function _pgDay(d){
+  if(typeof d === 'number' && d>=0 && d<=6 && Number.isInteger(d)) return d;
+  if(typeof d === 'string'){ const k = normalizeName(d); if(k in _PG_DAYS) return _PG_DAYS[k]; }
+  return null;
+}
+function _pgNum(v, min, max){
+  const n = parseFloat(v);
+  return (isNaN(n) || n < min) ? null : Math.min(n, max);
+}
+function _pgBasic(v){
+  if(typeof v !== 'string') return null;
+  const k = normalizeName(v);
+  if(k==='squat' || k==='sentadilla') return 'squat';
+  if(k==='bench' || k==='bench press' || k==='press banca') return 'bench';
+  if(k==='deadlift' || k==='peso muerto') return 'deadlift';
+  return null;
+}
+function parseProgramme(data){
+  let routinesRaw;
+  if(Array.isArray(data)) routinesRaw = data;
+  else if(data && Array.isArray(data.routines)) routinesRaw = data.routines;
+  else if(data && Array.isArray(data.exercises)) routinesRaw = [data];
+  else throw new Error('No routines found');
+  const progName = (data && !Array.isArray(data) && typeof data.programme === 'string') ? data.programme.trim() : '';
+  const routines = [];
+  const basics = {};
+  routinesRaw.forEach((r, ri)=>{
+    if(!r || !Array.isArray(r.exercises)) return;
+    const name = (typeof r.name === 'string' && r.name.trim()) || (progName ? `${progName} ${ri+1}` : `Routine ${ri+1}`);
+    let topCount = 0;
+    const exercises = [];
+    r.exercises.forEach(e=>{
+      const src = typeof e === 'string' ? { name:e } : e;
+      if(!src || typeof src.name !== 'string' || !src.name.trim()) return;
+      const exName = src.name.trim();
+      const basic = _pgBasic(src.basic) || basicKeyForExercise(exName);
+      let topSet = !!src.topSet;
+      if(topSet && topCount >= 2) topSet = false; // same cap as the editor
+      if(topSet) topCount++;
+      const o = { name: exName, sets: Math.round(_pgNum(src.sets, 1, 99) || 1), topSet, progression: topSet && !!src.progression };
+      const reps = _pgNum(src.reps ?? src.targetReps, 1, 99);
+      const rpe = _pgNum(src.rpe ?? src.targetRpe, 1, 10);
+      if(topSet && basic){
+        o.topReps = Math.round(_pgNum(src.topReps ?? src.reps, 1, 99) || 1);
+        o.backoffSets = Math.round(_pgNum(src.backoffSets, 0, 20) ?? 3);
+      } else if(reps){ o.targetReps = Math.round(reps); }
+      if(rpe) o.targetRpe = rpe;
+      if(_pgBasic(src.basic)) basics[normalizeName(exName)] = _pgBasic(src.basic);
+      exercises.push(o);
+    });
+    if(!exercises.length) return;
+    const dayList = r.days || r.scheduledDays || [];
+    const scheduledDays = [...new Set((Array.isArray(dayList) ? dayList : []).map(_pgDay).filter(d=> d!==null))].sort();
+    routines.push({ name, exercises, scheduledDays });
+  });
+  if(!routines.length) throw new Error('No valid exercises found');
+  return { routines, basics };
+}
+async function handleProgrammeFile(input){
+  const file = input.files && input.files[0];
+  input.value = ''; // allow re-selecting the same file later
+  if(!file) return;
+  let parsed;
+  try{
+    parsed = parseProgramme(JSON.parse(await file.text()));
+  } catch(err){
+    toast(err instanceof SyntaxError ? 'That file is not valid JSON' : `Invalid programme: ${err.message}`, 2800);
+    return;
+  }
+  const { routines, basics } = parsed;
+  const exCount = routines.reduce((n,r)=> n + r.exercises.length, 0);
+  const summary = routines.map(r=> `${r.name} (${r.exercises.length})`).join(', ');
+  const ok = await appConfirm(`${routines.length} routine${routines.length>1?'s':''}, ${exCount} exercises: ${summary}`, { title:'Import programme', confirmText:'Import', danger:false });
+  if(!ok) return;
+  routines.forEach(r=>{
+    // Never overwrite: a name clash gets a numeric suffix.
+    let finalName = r.name, n = 2;
+    while(db.routines.some(x=> x.name.toLowerCase() === finalName.toLowerCase())) finalName = `${r.name} (${n++})`;
+    r.exercises.forEach(e=>{ if(!db.exerciseCatalog.includes(e.name)) db.exerciseCatalog.push(e.name); });
+    db.routines.push({ id: uid('r'), name: finalName, exercises: r.exercises, scheduledDays: r.scheduledDays });
+  });
+  Object.keys(basics).forEach(k=>{ db.basicAssignments[k] = basics[k]; });
+  saveDB();
+  renderAll();
+  toast(`Imported ${routines.length} routine${routines.length>1?'s':''}`);
+}
+function downloadProgrammeTemplate(){
+  const tpl = {
+    programme: 'My programme',
+    routines: [
+      { name: 'Day 1 - Squat', days: ['Mon'], exercises: [
+        { name: 'Squat', basic: 'squat', topSet: true, topReps: 3, backoffSets: 3, progression: true },
+        { name: 'Leg Press', sets: 3, reps: 10, rpe: 8 },
+        'Leg Curl'
+      ]},
+      { name: 'Day 2 - Bench', days: ['Wed'], exercises: [
+        { name: 'Bench Press', basic: 'bench', topSet: true, topReps: 5, backoffSets: 3 },
+        { name: 'Overhead Press', sets: 3, reps: 8 }
+      ]}
+    ]
+  };
+  const url = URL.createObjectURL(new Blob([JSON.stringify(tpl, null, 2)], {type:'application/json'}));
+  const a = document.createElement('a');
+  a.href = url; a.download = 'programme-template.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('Template downloaded');
 }
 
 /* ================= NAV / OVERLAYS ================= */
