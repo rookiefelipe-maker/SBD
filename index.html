@@ -783,6 +783,7 @@
     <button class="btn-ghost" onclick="document.getElementById('programmeFile').click()"><i class="fa-solid fa-file-arrow-up" style="margin-right:6px;"></i>Upload Programme (.json)</button>
     <input type="file" id="programmeFile" accept=".json,application/json" style="display:none" onchange="handleProgrammeFile(this)">
     <button class="btn-ghost" style="border-style:solid; border-color:transparent; font-size:11px; margin-top:0;" onclick="downloadProgrammeTemplate()">Download JSON template</button>
+    <button class="btn-ghost" style="color:var(--red); border-color:var(--red-dim);" onclick="openDeleteRoutines()"><i class="fa-solid fa-trash-can" style="margin-right:6px;"></i>Delete routines</button>
   </section>
 
   <!-- STATS -->
@@ -1209,6 +1210,20 @@
     <div class="confirm-actions">
       <button class="btn-primary" id="confirmModalOk" style="margin-top:0;">Confirm</button>
       <button class="btn-secondary" id="confirmModalCancel" style="width:100%;">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- POPUP: Delete routines (history untouched) -->
+<div class="modal-backdrop" id="deleteRoutinesModal">
+  <div class="modal-card" style="max-width:340px;">
+    <button class="modal-close" onclick="closeDeleteRoutines()">×</button>
+    <div class="modal-title">Delete routines</div>
+    <div id="deleteRoutinesList"></div>
+    <small class="hint" style="margin:10px 0 14px;">Only the routine templates are removed. Your workout history, records and stats stay exactly as they are.</small>
+    <div style="display:flex; gap:8px;">
+      <button class="btn-secondary" style="flex:1;" onclick="toggleDeleteRoutinesAll()" id="deleteRoutinesAllBtn">Select all</button>
+      <button class="btn-danger" style="flex:1;" onclick="confirmDeleteRoutines()" id="deleteRoutinesGoBtn">Delete</button>
     </div>
   </div>
 </div>
@@ -2478,6 +2493,50 @@ async function deleteCurrentRoutine(){
   closeOverlay('routineEditorOverlay');
   renderRoutines();
   toast('Routine deleted');
+}
+
+/* Bulk delete of routine templates. Only db.routines is touched: db.sessions
+   (history), PRs, stats, the exercise catalog and basic-lift assignments are
+   left as they are. History rows keep their own routine name/exercises. */
+let deleteRoutinesSel = new Set();
+function openDeleteRoutines(){
+  if(!db.routines.length){ toast('No routines to delete'); return; }
+  deleteRoutinesSel = new Set();
+  renderDeleteRoutines();
+  document.getElementById('deleteRoutinesModal').classList.add('active');
+}
+function closeDeleteRoutines(){ document.getElementById('deleteRoutinesModal').classList.remove('active'); }
+function renderDeleteRoutines(){
+  const list = document.getElementById('deleteRoutinesList');
+  list.innerHTML = db.routines.map(r=> {
+    const on = deleteRoutinesSel.has(r.id);
+    const count = (r.exercises||[]).length;
+    return `<div class="toggle-row" style="border-bottom:1px solid var(--line);" onclick="toggleDeleteRoutine('${r.id}')">
+      <span class="toggle-label" style="min-width:0;"><b style="font-size:14px;">${r.name.replace(/</g,'&lt;')}</b><br><small style="color:var(--grey); font-size:11px;">${count} exercise${count===1?'':'s'}</small></span>
+      <div class="checkbox ${on?'on':''}">✓</div>
+    </div>`;
+  }).join('');
+  const n = deleteRoutinesSel.size;
+  document.getElementById('deleteRoutinesGoBtn').textContent = n ? `Delete (${n})` : 'Delete';
+  document.getElementById('deleteRoutinesAllBtn').textContent = n === db.routines.length ? 'Deselect all' : 'Select all';
+}
+function toggleDeleteRoutine(id){
+  if(deleteRoutinesSel.has(id)) deleteRoutinesSel.delete(id); else deleteRoutinesSel.add(id);
+  renderDeleteRoutines();
+}
+function toggleDeleteRoutinesAll(){
+  deleteRoutinesSel = deleteRoutinesSel.size === db.routines.length ? new Set() : new Set(db.routines.map(r=>r.id));
+  renderDeleteRoutines();
+}
+async function confirmDeleteRoutines(){
+  const n = deleteRoutinesSel.size;
+  if(!n){ toast('Select at least one routine'); return; }
+  if(!await appConfirm(`${n} routine${n>1?'s':''} will be deleted. Your workout history is not affected.`, {title:'Delete routines', confirmText:'Delete'})) return;
+  db.routines = db.routines.filter(r=> !deleteRoutinesSel.has(r.id));
+  saveDB();
+  closeDeleteRoutines();
+  renderAll();
+  toast(`${n} routine${n>1?'s':''} deleted`);
 }
 
 /* ================= LIVE WORKOUT ================= */
