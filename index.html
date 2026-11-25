@@ -433,28 +433,6 @@
     .warmup-screen p{color:var(--grey); font-size:13px; line-height:1.5; margin-bottom:26px;}
     .warmup-screen .btn-primary{margin-top:0;}
 
-  .rest-fab-wrap{
-    position:fixed; right:18px; bottom:150px; z-index:65;
-    display:none; flex-direction:column; align-items:flex-end; gap:10px;
-  }
-  .rest-fab-wrap.active{display:flex;}
-  .rest-fab{
-    width:66px; height:66px; border-radius:50%; background:var(--red); color:var(--white); border:none;
-    font-weight:800; font-size:14px; font-variant-numeric:tabular-nums;
-    box-shadow:0 8px 20px rgba(224,38,27,0.5);
-  }
-  .rest-controls{
-    display:none; flex-direction:column; gap:8px; background:var(--charcoal);
-    border:1px solid var(--line); border-radius:12px; padding:10px;
-  }
-  .rest-controls.open{display:flex;}
-  .rest-presets{display:flex; gap:6px; margin-bottom:2px;}
-  .rest-presets button{padding:8px 8px !important; font-size:11px !important;}
-  .rest-controls button{
-    background:var(--card); border:1px solid var(--line); color:var(--white);
-    padding:9px 16px; border-radius:8px; font-size:12px; font-weight:700; white-space:nowrap;
-  }
-
   /* Full-screen dim + big countdown shown during the last 5 seconds of rest */
   .rest-dim-overlay{
     position:fixed; inset:0; background:rgba(0,0,0,0.88); z-index:90;
@@ -468,11 +446,31 @@
   }
   .rest-dim-label{font-size:13px; color:var(--white); text-transform:uppercase; letter-spacing:2px;}
   @keyframes restDimPulse{ from{transform:scale(1.4); opacity:0;} to{transform:scale(1); opacity:1;} }
-  .rest-dim-hint{font-size:12px; color:var(--grey); text-transform:uppercase; letter-spacing:1px;}
+  .rest-dim-hint{font-size:12px; color:var(--grey); text-transform:uppercase; letter-spacing:1px; background:none; border:none; font-family:inherit; padding:10px 18px; cursor:pointer;}
+  .rest-dim-hint:active{color:var(--red);}
   .rest-dim-presets{display:flex; gap:8px; margin-top:10px; width:min(92vw,420px);}
   .rest-dim-presets button{flex:1; min-width:0; background:transparent; border:1px solid var(--line); border-radius:8px; color:var(--grey); padding:9px 0; font-size:13px; font-weight:700;}
   .rest-dim-presets button:active{border-color:var(--red); color:var(--red);}
   .rest-dim-adjust{display:flex; gap:10px; margin-top:16px;}
+
+  /* Inactivity lock: shown after 4 min with no activity in a live workout */
+  .idle-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:90;
+    display:none; align-items:center; justify-content:center; flex-direction:column; gap:12px;
+    padding:24px; text-align:center; backdrop-filter:blur(2px);
+  }
+  .idle-overlay.active{display:flex;}
+  .idle-title{font-size:clamp(30px, 9vw, 44px); font-weight:800; color:var(--red); line-height:1.1; letter-spacing:0.3px; animation:restDimPulse .5s ease;}
+  .idle-sub{font-size:11px; color:var(--grey); text-transform:uppercase; letter-spacing:2px;}
+  .idle-actions{display:flex; flex-direction:column; gap:10px; width:min(72vw,280px); margin-top:26px;}
+  .idle-actions button{
+    width:100%; background:transparent; border:1px solid var(--line); border-radius:12px; padding:13px;
+    font-size:12px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; transition:background .15s ease;
+  }
+  .idle-actions .idle-continue{color:var(--green); border-color:rgba(63,174,92,0.55);}
+  .idle-actions .idle-cancel{color:var(--red); border-color:rgba(224,38,27,0.55);}
+  .idle-actions .idle-continue:active{background:rgba(63,174,92,0.12);}
+  .idle-actions .idle-cancel:active{background:rgba(224,38,27,0.12);}
   .rest-dim-adjust button{min-width:76px; background:transparent; border:1px solid var(--line); border-radius:8px; color:var(--white); padding:9px 14px; font-size:13px; font-weight:700;}
 
   /* Live workout: floating actions menu button. Sits in the header's top-right
@@ -1165,28 +1163,11 @@
 </div>
 <canvas id="confettiCanvas"></canvas>
 
-<div class="rest-fab-wrap" id="restFabWrap">
-  <div class="rest-controls" id="restControls">
-    <div class="rest-presets">
-      <button onclick="setRestDuration(60)">1:00</button>
-      <button onclick="setRestDuration(90)">1:30</button>
-      <button onclick="setRestDuration(120)">2:00</button>
-      <button onclick="setRestDuration(180)">3:00</button>
-      <button onclick="setRestDuration(300)">5:00</button>
-    </div>
-    <button onclick="adjustRest(15)">+15s</button>
-    <button onclick="adjustRest(-15)">-15s</button>
-    <button onclick="restartRest()">Restart</button>
-    <button onclick="stopRest()">Skip</button>
-  </div>
-  <button class="rest-fab" id="restFab" onclick="toggleRestControls()"><span id="restFabVal">03:00</span></button>
-</div>
-
 <!-- Full-screen rest timer -->
-<div class="rest-dim-overlay" id="restDimOverlay" onclick="stopRest()">
+<div class="rest-dim-overlay" id="restDimOverlay">
   <div class="rest-dim-label">Rest</div>
   <div class="rest-dim-count" id="restDimCount">03:00</div>
-  <div class="rest-dim-hint">Tap to skip</div>
+  <button type="button" class="rest-dim-hint" onclick="stopRest()">Tap to skip</button>
   <div class="rest-dim-adjust">
     <button onclick="event.stopPropagation(); adjustRest(-15)">-15</button>
     <button onclick="event.stopPropagation(); adjustRest(15)">+15</button>
@@ -1197,6 +1178,16 @@
     <button onclick="event.stopPropagation(); setRestDuration(180)">3 min</button>
     <button onclick="event.stopPropagation(); setRestDuration(240)">4 min</button>
     <button onclick="event.stopPropagation(); setRestDuration(300)">5 min</button>
+  </div>
+</div>
+
+<!-- Inactivity lock for live workouts -->
+<div class="idle-overlay" id="idleOverlay">
+  <div class="idle-title">Are you there?</div>
+  <div class="idle-sub">Workout timer paused</div>
+  <div class="idle-actions">
+    <button type="button" class="idle-continue" onclick="idleContinue()">Continue</button>
+    <button type="button" class="idle-cancel" onclick="idleCancel()">Cancel session</button>
   </div>
 </div>
 
@@ -2634,6 +2625,7 @@ async function discardWorkout(){
   stopRest();
   saveActiveSession();
   closeOverlay('liveWorkoutOverlay');
+  hideIdleOverlay();
 }
 function startFreeWorkout(){
   liveSession = { routine:'Freestyle', startedAt: Date.now(), exercises: [] };
@@ -2645,9 +2637,14 @@ function startFreeWorkout(){
   resetWorkoutScrollUI();
 }
 
+/* Time actually spent training: wall-clock time minus the time the inactivity
+   lock kept the workout paused. */
+function activeMsBetween(from, to){
+  return Math.max(0, (to - from) - ((liveSession && liveSession.pausedMs) || 0));
+}
 function formatWorkoutElapsed(){
   if(!liveSession || !liveSession.startedAt) return '00:00:00';
-  const elapsed = Math.max(0, Math.floor((Date.now()-liveSession.startedAt)/1000));
+  const elapsed = Math.max(0, Math.floor(activeMsBetween(liveSession.startedAt, liveSession.pausedAt || Date.now())/1000));
   const hours = Math.floor(elapsed/3600).toString().padStart(2,'0');
   const minutes = Math.floor((elapsed%3600)/60).toString().padStart(2,'0');
   const seconds = (elapsed%60).toString().padStart(2,'0');
@@ -2672,12 +2669,67 @@ stats.innerHTML = `<span><span style="color:var(--red);font-weight:700;">Last:</
 function startWorkoutClock(){
   stopWorkoutClock();
   updateWorkoutHeader();
-  workoutClockInterval = setInterval(updateWorkoutHeader, 1000);
+  workoutClockInterval = setInterval(()=>{ updateWorkoutHeader(); checkWorkoutIdle(); }, 1000);
+  // Re-opening a workout that was left paused: ask again before continuing.
+  if(liveSession && liveSession.pausedAt) showIdleOverlay();
+  else markWorkoutActivity();
 }
 function stopWorkoutClock(){
   clearInterval(workoutClockInterval);
   workoutClockInterval = null;
 }
+
+/* ---- Inactivity lock ----
+   If 4 minutes go by in a live workout with no rest timer, set done, check or
+   other interaction, the screen locks with an "Are you there?" prompt and the
+   workout duration is paused until the user taps Continue. */
+const IDLE_LIMIT_MS = 4*60*1000;
+let lastWorkoutActivity = Date.now();
+function markWorkoutActivity(){ lastWorkoutActivity = Date.now(); }
+function workoutOverlayOpen(){
+  const o = document.getElementById('liveWorkoutOverlay');
+  return !!(o && o.classList.contains('active'));
+}
+function checkWorkoutIdle(){
+  if(!liveSession || liveSession.pausedAt || !workoutOverlayOpen()) return;
+  if(restActive){ markWorkoutActivity(); return; } // a running rest timer counts as activity
+  if(Date.now() - lastWorkoutActivity < IDLE_LIMIT_MS) return;
+  // Pause from the moment the 4 minutes were up (matters if the phone was
+  // locked / the tab was in the background and this check ran late).
+  liveSession.pausedAt = Math.min(Date.now(), lastWorkoutActivity + IDLE_LIMIT_MS);
+  saveActiveSession();
+  updateWorkoutHeader();
+  showIdleOverlay();
+}
+function showIdleOverlay(){
+  const o = document.getElementById('idleOverlay');
+  if(o) o.classList.add('active');
+}
+function hideIdleOverlay(){
+  const o = document.getElementById('idleOverlay');
+  if(o) o.classList.remove('active');
+}
+function idleContinue(){
+  if(liveSession && liveSession.pausedAt){
+    liveSession.pausedMs = (liveSession.pausedMs || 0) + Math.max(0, Date.now() - liveSession.pausedAt);
+    liveSession.pausedAt = null;
+    saveActiveSession();
+  }
+  markWorkoutActivity();
+  hideIdleOverlay();
+  updateWorkoutHeader();
+}
+async function idleCancel(){
+  await discardWorkout();       // asks for confirmation; does nothing if the user backs out
+  if(!liveSession) hideIdleOverlay();
+}
+// Any tap on a button / input / chip while the workout is open counts as activity.
+['click','input','change'].forEach(evt=>{
+  document.addEventListener(evt, (e)=>{
+    if(!liveSession || liveSession.pausedAt || !workoutOverlayOpen()) return;
+    if(e.target.closest && e.target.closest('button, input, select, textarea, label, .chip, [onclick]')) markWorkoutActivity();
+  }, true);
+});
 
 /* Floating actions menu + scroll-aware header/footer for the live workout */
 let workoutScrollLast = 0;
@@ -2793,7 +2845,7 @@ function jumpToExercise(idx){
 function startFirstExercise(){
   if(!liveSession) return;
   liveSession.focusedExerciseIndex = 0;
-  if(!liveSession.warmupEndedAt) liveSession.warmupEndedAt = Date.now();
+  if(!liveSession.warmupEndedAt){ liveSession.warmupEndedAt = Date.now(); liveSession.warmupPausedMs = liveSession.pausedMs || 0; }
   saveActiveSession();
   renderLiveWorkout();
   updateWorkoutHeader();
@@ -3526,14 +3578,16 @@ async function finishWorkout(){
   Object.keys(BASICS).forEach(key=>{ prevPRs[key] = prForBasic(key); });
 
   const finishedAt = Date.now();
-  const durationMin = Math.max(1, Math.round((finishedAt-liveSession.startedAt)/60000));
+  const durationMin = Math.max(1, Math.round(activeMsBetween(liveSession.startedAt, finishedAt)/60000));
   // If the session went through the Stretching & Warm-up screen, split the
   // total time into warm-up vs. actual training; freestyle workouts (which
   // skip that screen) simply won't have this breakdown.
   let warmupDurationMin = null, trainingDurationMin = null;
   if(liveSession.warmupEndedAt){
-    warmupDurationMin = Math.max(0, Math.round((liveSession.warmupEndedAt - liveSession.startedAt)/60000));
-    trainingDurationMin = Math.max(0, Math.round((finishedAt - liveSession.warmupEndedAt)/60000));
+    const warmupPaused = liveSession.warmupPausedMs || 0;
+    const totalPaused = liveSession.pausedMs || 0;
+    warmupDurationMin = Math.max(0, Math.round((liveSession.warmupEndedAt - liveSession.startedAt - warmupPaused)/60000));
+    trainingDurationMin = Math.max(0, Math.round((finishedAt - liveSession.warmupEndedAt - (totalPaused - warmupPaused))/60000));
   }
   const newSession = {
     id: uid('s'),
@@ -3957,43 +4011,32 @@ function startRest(seconds){
   lastRestSeconds = seconds;
   restActive = true;
   restRemaining = seconds;
-  document.getElementById('restFabWrap').classList.add('active');
-  updateRestDisplay();
+  markWorkoutActivity();
   updateRestDimOverlay();
   clearInterval(restInterval);
   restInterval = setInterval(()=>{
     restRemaining--;
     if(restRemaining<=0){ stopRest(); vibrateRestEnd(); playRestEndSound(); toast('Back to it!'); return; }
     if(restRemaining<=5){ playCountdownBeep(); }
-    updateRestDisplay();
     updateRestDimOverlay();
   },1000);
 }
 function restartRest(){ startRest(lastRestSeconds != null ? lastRestSeconds : db.settings.restSeconds); }
-function toggleRestControls(){ document.getElementById('restControls').classList.toggle('open'); }
-function updateRestDisplay(){
-  const m = Math.floor(restRemaining/60).toString().padStart(2,'0');
-  const s = (restRemaining%60).toString().padStart(2,'0');
-  document.getElementById('restFabVal').textContent = m+':'+s;
-}
 function adjustRest(delta){
   restRemaining = Math.max(0, restRemaining+delta);
   if(restRemaining===0){ stopRest(); return; }
-  updateRestDisplay();
   updateRestDimOverlay();
 }
 function setRestDuration(seconds){ startRest(seconds); }
 function stopRest(){
   restActive = false;
+  markWorkoutActivity();
   clearInterval(restInterval);
-  document.getElementById('restFabWrap').classList.remove('active');
-  document.getElementById('restControls').classList.remove('open');
   updateRestDimOverlay();
 }
 function startManualRest(exIdx){
   const ex = liveSession.exercises[exIdx];
   startRest(restSecondsForExercise(ex.name));
-  document.getElementById('restControls').classList.add('open');
 }
 
 /* ================= STATS ================= */
