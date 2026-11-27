@@ -164,6 +164,50 @@
   .routine-card p{font-size:12px; color:var(--grey);}
   .routine-card .arrow{color:var(--red); font-size:20px;}
   .routine-card .del{color:var(--grey); font-size:11px; text-transform:uppercase; letter-spacing:0.5px; padding:6px 10px;}
+  .workout-screen-header{position:relative; display:flex; align-items:center; gap:10px; margin:8px 0 20px; min-height:34px;}
+  .workout-screen-header h2{flex:1; font-size:22px; font-weight:800;}
+  .workout-back-btn,.workout-tools-trigger{border:0; background:none; color:var(--grey); cursor:pointer;}
+  .workout-back-btn{font-size:25px; line-height:1; padding:0 3px;}
+  .workout-tools-trigger{font-size:24px; line-height:1; padding:2px 5px;}
+  .workout-tools-menu{position:absolute; top:40px; right:0; z-index:30; width:min(250px, 82vw); padding:6px; background:var(--card); border:1px solid var(--line); border-radius:12px; box-shadow:0 12px 30px rgba(0,0,0,.4);}
+  .workout-tools-menu[hidden],.workout-subscreen[hidden]{display:none;}
+  .workout-tools-menu button{display:block; width:100%; padding:11px 12px; border:0; border-radius:8px; background:none; color:var(--white); text-align:left; font-size:13px; cursor:pointer;}
+  .workout-tools-menu button:active{background:var(--line);}
+  .workout-tools-divider{height:1px; margin:4px 8px; background:var(--line);}
+  .workout-section-label{margin:18px 0 10px; color:var(--grey); font-size:11px; letter-spacing:1px; text-transform:uppercase;}
+  .training-block-tabs{display:flex; gap:8px; overflow-x:auto; padding:0 1px 5px; scrollbar-width:none; -webkit-overflow-scrolling:touch;}
+  .training-block-tabs::-webkit-scrollbar{display:none;}
+  .training-block-tab{flex:1 0 112px; max-width:160px; min-height:60px; padding:12px 14px; border:1px solid var(--line); border-radius:11px; background:var(--card); color:var(--white); font-size:14px; font-weight:800; cursor:pointer;}
+  .training-block-tab.active{border-color:var(--red); background:var(--red); color:var(--white);}
+  .week-list{display:grid; gap:10px;}
+  .week-card{width:100%; min-height:88px; padding:16px; display:flex; justify-content:space-between; align-items:center; gap:12px; border:1px solid var(--line); border-radius:14px; background:var(--card); color:var(--white); text-align:left; cursor:pointer;}
+  .week-card.current{border-color:var(--red);}
+  .week-card-info{flex:1; min-width:0;}
+  .week-card-title{font-size:16px; font-weight:800;}
+  .week-card-count{margin-top:7px; color:#b0b0aa; font-size:12px;}
+  .week-card-status{display:flex; align-items:center; gap:10px; flex:none; color:var(--grey); font-size:11px; font-weight:700;}
+  .week-card.current .week-card-status{color:var(--red);}
+  .week-card-check{color:var(--green); font-size:20px; font-weight:800;}
+  .week-card-arrow{font-size:22px; line-height:1;}
+  .week-progress-segments{display:flex; gap:4px; margin-top:10px;}
+  .week-progress-segment{height:5px; flex:1; border-radius:5px; background:var(--line);}
+  .week-progress-segment.done{background:var(--red);}
+  .week-card.completed .week-progress-segment.done{background:var(--green);}
+  .week-screen-header{display:flex; align-items:center; gap:10px; margin:10px 0 18px;}
+  .week-screen-header h3{font-size:20px; font-weight:800;}
+  .week-screen-subtitle{margin:-8px 0 16px; color:var(--grey); font-size:11px; letter-spacing:.5px; text-transform:uppercase;}
+  .week-workouts{display:grid; gap:10px;}
+  .week-workout-card{min-height:96px; padding:16px; display:flex; align-items:center; gap:14px; border:1px solid var(--line); border-radius:14px; background:var(--card);}
+  .week-workout-card.next{border-color:var(--red);}
+  .week-workout-info{flex:1; min-width:0;}
+  .week-workout-day{color:#b0b0aa; font-size:11px; letter-spacing:.5px; text-transform:uppercase;}
+  .week-workout-name{margin-top:8px; font-size:15px; font-weight:700; overflow-wrap:anywhere;}
+  .week-workout-next-label{margin-top:9px; color:var(--red); font-size:11px; font-weight:700; letter-spacing:.5px;}
+  .week-workout-start{width:42px; height:42px; flex:none; border:0; border-radius:50%; background:var(--charcoal); color:var(--white); font-size:16px; cursor:pointer;}
+  .week-workout-card.next .week-workout-start{background:var(--red);}
+  .week-workout-check{width:28px; flex:none; color:var(--green); font-size:22px; text-align:center;}
+  .routine-library-card{margin-bottom:10px;}
+  .routine-block-field{margin-top:18px;}
 
   .active-session-banner{
     background:var(--red); border-radius:14px; padding:16px 18px; margin-bottom:16px;
@@ -248,6 +292,7 @@
   .workout-header-row{display:flex; align-items:center; gap:14px; margin-top:5px; flex-wrap:wrap;}
   .workout-clock{font-size:18px; font-weight:800; font-variant-numeric:tabular-nums; color:var(--red);}
   .workout-date{font-size:11px; color:var(--grey);}
+  .workout-block-context{font-size:11px; color:var(--red); font-weight:700; margin-top:5px;}
   .workout-exercise-stats{display:flex; gap:14px; flex-wrap:wrap; margin-top:7px; font-size:11px; color:var(--grey);}
   .workout-exercise-stats b{color:var(--white); font-weight:700;}
   .overlay-body{flex:1; overflow-y:auto; padding:16px; padding-bottom:110px;}
@@ -774,14 +819,38 @@
 
   <!-- WORKOUT -->
   <section id="entrenamiento" class="screen">
+    <div class="workout-screen-header">
+      <button type="button" class="workout-back-btn" id="workoutBackBtn" onclick="returnToWorkoutBlocks()" aria-label="Back" hidden>‹</button>
+      <h2 id="workoutScreenTitle">Workout</h2>
+      <button type="button" class="workout-tools-trigger" onclick="toggleWorkoutToolsMenu()" aria-label="Workout options">⋯</button>
+      <div class="workout-tools-menu" id="workoutToolsMenu" hidden>
+        <button type="button" onclick="createTrainingBlockFromMenu()">New block</button>
+        <button type="button" onclick="editSelectedTrainingBlock()">Edit current block</button>
+        <button type="button" onclick="deleteSelectedTrainingBlock()">Delete current block</button>
+        <div class="workout-tools-divider"></div>
+        <button type="button" onclick="openRoutineLibrary()">Manage routines</button>
+        <button type="button" onclick="createRoutineFromMenu()">New routine</button>
+        <button type="button" onclick="importProgrammeFromMenu()">Import programme (.json)</button>
+        <button type="button" onclick="downloadProgrammeFromMenu()">Download JSON template</button>
+        <button type="button" onclick="deleteRoutinesFromMenu()">Delete routines</button>
+      </div>
+    </div>
     <div id="activeSessionBanner"></div>
-    <h2 class="title">Your routines</h2>
-    <div id="routineList"></div>
-    <button class="btn-ghost" onclick="openRoutineEditor()">+ New routine</button>
-    <button class="btn-ghost" onclick="document.getElementById('programmeFile').click()"><i class="fa-solid fa-file-arrow-up" style="margin-right:6px;"></i>Upload Programme (.json)</button>
+    <div id="blockOverviewView" class="workout-subscreen">
+      <div class="workout-section-label">Training block</div>
+      <div class="training-block-tabs" id="blockTabs" role="tablist" aria-label="Training blocks"></div>
+      <div class="workout-section-label">Weeks</div>
+      <div class="week-list" id="blockWeeksList"></div>
+    </div>
+    <div id="blockWeekView" class="workout-subscreen" hidden>
+      <div class="week-screen-header"><h3 id="selectedWeekTitle">Week 1</h3></div>
+      <div class="week-screen-subtitle" id="selectedWeekSubtitle"></div>
+      <div class="week-workouts" id="weekWorkoutList"></div>
+    </div>
+    <div id="routineLibraryView" class="workout-subscreen" hidden>
+      <div id="routineList"></div>
+    </div>
     <input type="file" id="programmeFile" accept=".json,application/json" style="display:none" onchange="handleProgrammeFile(this)">
-    <button class="btn-ghost" style="border-style:solid; border-color:transparent; font-size:11px; margin-top:0;" onclick="downloadProgrammeTemplate()">Download JSON template</button>
-    <button class="btn-ghost" style="color:var(--red); border-color:var(--red-dim);" onclick="openDeleteRoutines()"><i class="fa-solid fa-trash-can" style="margin-right:6px;"></i>Delete routines</button>
   </section>
 
   <!-- STATS -->
@@ -812,6 +881,18 @@
       <label>Routine name</label>
       <input type="text" id="routineNameInput" placeholder="E.g. Push day">
     </div>
+    <div class="field routine-block-field">
+      <label>Training block</label>
+      <select id="routineBlockSelect">
+        <option value="">No block</option>
+      </select>
+      <small class="hint">Assign this routine to a block, or leave it independent.</small>
+    </div>
+    <div class="field">
+      <label>Week in block (optional)</label>
+      <input type="number" id="routineWeekInput" min="1" max="52" step="1" placeholder="Every week">
+      <small class="hint">Leave blank to repeat this routine every week.</small>
+    </div>
     <div class="field" style="margin-top:22px;">
       <label>Weekly schedule</label>
       <div class="schedule-days" id="routineScheduleDays"></div>
@@ -827,6 +908,37 @@
   </div>
 </div>
 
+<!-- OVERLAY: Training block editor -->
+<div class="overlay" id="blockEditorOverlay">
+  <div class="overlay-header">
+    <h2 id="blockEditorTitle">New training block</h2>
+    <button class="close-btn" onclick="closeOverlay('blockEditorOverlay')">×</button>
+  </div>
+  <div class="overlay-body">
+    <div class="field">
+      <label>Block name</label>
+      <input type="text" id="blockNameInput" placeholder="E.g. Accumulation">
+    </div>
+    <div class="field" style="margin-top:16px;">
+      <label>Focus (optional)</label>
+      <input type="text" id="blockFocusInput" placeholder="E.g. Volume and technique">
+    </div>
+    <div class="field" style="margin-top:16px;">
+      <label>Duration (weeks)</label>
+      <input type="number" id="blockWeeksInput" min="1" max="52" step="1" value="4">
+    </div>
+    <div class="field" style="margin-top:16px;">
+      <label>Start date (optional)</label>
+      <input type="date" id="blockStartDateInput">
+      <small class="hint">Set a start date to see the current week and block progress.</small>
+    </div>
+  </div>
+  <div class="overlay-footer">
+    <button class="btn-primary" onclick="saveTrainingBlock()">Save block</button>
+    <button id="deleteBlockBtn" class="btn-danger" style="width:100%; margin-top:8px; display:none;" onclick="deleteTrainingBlock()">Delete block</button>
+  </div>
+</div>
+
 <!-- OVERLAY: Live workout -->
 <div class="overlay" id="liveWorkoutOverlay">
   <div class="overlay-header">
@@ -836,6 +948,7 @@
         <span class="workout-clock" id="workoutClock">00:00:00</span>
         <span class="workout-date" id="workoutDate"></span>
       </div>
+      <div class="workout-block-context" id="workoutBlockContext" hidden></div>
       <div class="workout-exercise-stats" id="workoutExerciseStats"></div>
     </div>
     <button class="close-btn" onclick="minimizeWorkout()" title="Minimize">–</button>
@@ -1360,6 +1473,7 @@ function loadDB(){
       if(!parsed.settings) parsed.settings = { restSeconds: 180 };
       if(!parsed.settings.categories) parsed.settings.categories = [];
       if(!parsed.basicAssignments) parsed.basicAssignments = {};
+      if(!Array.isArray(parsed.blocks)) parsed.blocks = [];
       const needsMigration = !parsed.basicAliasMigrationDone;
       migrateBasicAssignments(parsed);
       applyBarSettingsDefaults(parsed);
@@ -1406,6 +1520,7 @@ function seedData(){
     settings: { restSeconds: 180, categories: [] },
     goals: { squat: 140, bench: 100, deadlift: 180 },
     basicAssignments: {},
+    blocks: [],
     exerciseCatalog: ['Squat','Bench Press','Deadlift','Overhead Press','Pull-ups','Barbell Row','Dips','Leg Press','Leg Curl','Bicep Curl','Tricep Extension'],
     routines: [
       { id:'r1', name:'Push', exercises:['Bench Press','Overhead Press','Dips'] },
@@ -2017,6 +2132,29 @@ function openYearlyDay(ds){
   const list = (db.sessions || []).filter(s=>s.date===ds);
   if(list.length) openSessionDetail(list[list.length-1].id);
 }
+function routineWeekNumber(routine){
+  if(Number.isInteger(routine.week) && routine.week > 0) return routine.week;
+  const match = String(routine.name || '').match(/\b(?:week|wk|w)\s*(\d+)\b/i);
+  return match ? Number(match[1]) : null;
+}
+function getBlockRoutineWeek(block, routine){
+  if(Number.isInteger(routine.week) && routine.week > 0) return routine.week;
+  const namedWeek = routineWeekNumber(routine);
+  if(namedWeek === null) return null;
+  const numberedWeeks = db.routines
+    .filter(item=>item.blockId === block.id && !(Number.isInteger(item.week) && item.week > 0))
+    .map(item=>routineWeekNumber(item))
+    .filter(week=>week !== null);
+  const offset = numberedWeeks.length ? Math.min(...numberedWeeks) - 1 : 0;
+  return namedWeek - offset;
+}
+function getBlockWeekRoutines(block, week){
+  return db.routines.filter(routine=>{
+    if(routine.blockId !== block.id) return false;
+    const routineWeek = getBlockRoutineWeek(block, routine);
+    return routineWeek === null || routineWeek === week;
+  });
+}
 function renderWeeklyDashboard(){
   const sessionsByDate = {};
   db.sessions.forEach(session=>{
@@ -2035,7 +2173,18 @@ function renderWeeklyDashboard(){
   monday.setDate(today.getDate() - ((today.getDay()+6)%7));
   const weekDays = document.getElementById('weekDays');
   const labels = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
-  const plannedByDay = day => db.routines.filter(r=> (r.scheduledDays||[]).includes(day)).map(r=>r.name);
+  const plannedByDay = day => {
+    const currentBlock = getCurrentTrainingBlock();
+    const planned = db.routines.filter(routine=>
+      !(db.blocks || []).some(block=>block.id === routine.blockId) &&
+      (routine.scheduledDays || []).includes(day)
+    );
+    if(currentBlock){
+      planned.push(...getBlockWeekRoutines(currentBlock, getCurrentBlockWeek(currentBlock))
+        .filter(routine=>(routine.scheduledDays || []).includes(day)));
+    }
+    return planned.map(routine=>routine.name);
+  };
   if(weekDays){
     weekDays.innerHTML = '';
     for(let day=0; day<7; day++){
@@ -2046,7 +2195,7 @@ function renderWeeklyDashboard(){
       const planned = plannedByDay(day);
       const cell = document.createElement('div');
       cell.className = 'week-day' + (dateStr===todayStr() ? ' today' : '') + (completed.length ? ' done' : '');
-      cell.innerHTML = `<div class="dow">${labels[day]}</div><div class="day-num">${date.getDate()}</div><div class="day-mark"></div><div class="day-label">${completed.length ? completed.join(', ') : planned.length ? planned.join(', ') : 'Rest'}</div>`;
+      cell.innerHTML = `<div class="dow">${labels[day]}</div><div class="day-num">${date.getDate()}</div><div class="day-mark"></div><div class="day-label">${completed.length ? completed.map(escapeHtml).join(', ') : planned.length ? planned.join(', ') : 'Rest'}</div>`;
       weekDays.appendChild(cell);
     }
   }
@@ -2060,7 +2209,7 @@ function renderWeeklyDashboard(){
   const planEl = document.getElementById('weekTodayPlan');
   if(planEl){
     planEl.innerHTML = todayCompleted.length
-      ? `Today · completed<strong>${todayCompleted.join(', ')}</strong>`
+      ? `Today · completed<strong>${todayCompleted.map(escapeHtml).join(', ')}</strong>`
       : todayPlans.length
         ? `Today · planned<strong>${todayPlans.join(', ')}</strong>`
         : 'Today · rest day<strong>No workout scheduled</strong>';
@@ -2110,16 +2259,297 @@ function renderWeek(){
 }
 
 /* ================= WORKOUT (routines) ================= */
+let workoutView = 'blocks';
+let selectedTrainingBlockId = null;
+let selectedTrainingBlockWeek = 1;
 function renderRoutines(){
+  renderWorkoutView();
+}
+function getTrainingBlockNumber(blockId){
+  const index = (db.blocks || []).findIndex(block=>block.id === blockId);
+  return index >= 0 ? index + 1 : '';
+}
+function renderWorkoutView(){
+  const blocks = db.blocks || [];
+  const currentBlock = getCurrentTrainingBlock();
+  if(!blocks.some(block=>block.id === selectedTrainingBlockId)){
+    const initialBlock = currentBlock || blocks[blocks.length-1] || null;
+    selectedTrainingBlockId = initialBlock ? initialBlock.id : null;
+    selectedTrainingBlockWeek = initialBlock ? getCurrentBlockWeek(initialBlock) : 1;
+  }
+  if(workoutView === 'week' && !blocks.some(block=>block.id === selectedTrainingBlockId)) workoutView = 'blocks';
+  document.getElementById('blockOverviewView').hidden = workoutView !== 'blocks';
+  document.getElementById('blockWeekView').hidden = workoutView !== 'week';
+  document.getElementById('routineLibraryView').hidden = workoutView !== 'routines';
+  const isSubscreen = workoutView !== 'blocks';
+  document.getElementById('workoutBackBtn').hidden = !isSubscreen;
+  document.getElementById('workoutScreenTitle').textContent =
+    workoutView === 'week' ? `Week ${selectedTrainingBlockWeek}` : (workoutView === 'routines' ? 'Routines' : 'Workout');
+  if(workoutView === 'blocks') renderBlockOverview();
+  else if(workoutView === 'week') renderWorkoutWeek();
+  else renderRoutineLibrary();
+}
+function returnToWorkoutBlocks(){
+  workoutView = 'blocks';
+  closeWorkoutToolsMenu();
+  renderRoutines();
+}
+function openWorkoutWeek(week){
+  selectedTrainingBlockWeek = week;
+  workoutView = 'week';
+  closeWorkoutToolsMenu();
+  renderRoutines();
+}
+function openRoutineLibrary(){
+  workoutView = 'routines';
+  closeWorkoutToolsMenu();
+  renderRoutines();
+}
+function toggleWorkoutToolsMenu(){
+  const menu = document.getElementById('workoutToolsMenu');
+  menu.hidden = !menu.hidden;
+}
+function closeWorkoutToolsMenu(){
+  const menu = document.getElementById('workoutToolsMenu');
+  if(menu) menu.hidden = true;
+}
+function createTrainingBlockFromMenu(){ closeWorkoutToolsMenu(); openBlockEditor(); }
+function editSelectedTrainingBlock(){
+  closeWorkoutToolsMenu();
+  if(!selectedTrainingBlockId){ toast('Create a block first'); return; }
+  openBlockEditor(selectedTrainingBlockId);
+}
+function deleteSelectedTrainingBlock(){
+  closeWorkoutToolsMenu();
+  if(!selectedTrainingBlockId){ toast('Create a block first'); return; }
+  deleteTrainingBlock(selectedTrainingBlockId);
+}
+function createRoutineFromMenu(){ closeWorkoutToolsMenu(); openRoutineEditor(); }
+function importProgrammeFromMenu(){
+  closeWorkoutToolsMenu();
+  document.getElementById('programmeFile').click();
+}
+function downloadProgrammeFromMenu(){ closeWorkoutToolsMenu(); downloadProgrammeTemplate(); }
+function deleteRoutinesFromMenu(){ closeWorkoutToolsMenu(); openDeleteRoutines(); }
+
+function getWeekWorkouts(block, week){
+  const days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const routines = getBlockWeekRoutines(block, week);
+  const scheduledDays = [...new Set(routines.flatMap(routine=>
+    (routine.scheduledDays || []).filter(day=>Number.isInteger(day) && day>=0 && day<=6)
+  ))].sort((a,b)=>a-b);
+  const dayNumbers = new Map(scheduledDays.map((day,index)=>[day,index+1]));
+  const workouts = [];
+  routines.forEach((routine, routineOrder)=>{
+    const routineDays = [...new Set((routine.scheduledDays || []).filter(day=>Number.isInteger(day) && day>=0 && day<=6))];
+    if(!routineDays.length){
+      workouts.push({key:`${routine.id}:unscheduled`, routine, dayIndex:null, dayNumber:scheduledDays.length+1, dayName:'Not scheduled', routineOrder});
+      return;
+    }
+    routineDays.forEach(dayIndex=>{
+      workouts.push({
+        key:`${routine.id}:${dayIndex}`,
+        routine,
+        dayIndex,
+        dayNumber:dayNumbers.get(dayIndex),
+        dayName:days[dayIndex],
+        routineOrder
+      });
+    });
+  });
+  return workouts.sort((a,b)=>
+    (a.dayIndex ?? 7) - (b.dayIndex ?? 7) || a.routineOrder - b.routineOrder
+  );
+}
+function routineForSession(session, block){
+  if(session.routineId){
+    return db.routines.find(routine=>
+      routine.id === session.routineId && routine.blockId === block.id
+    ) || null;
+  }
+  const matches = db.routines.filter(routine=>
+    routine.blockId === block.id && routine.name === session.routine
+  );
+  return matches.length === 1 ? matches[0] : null;
+}
+function getBlockWeekSessions(block, week){
+  return db.sessions.flatMap(session=>{
+    if(session.blockId !== block.id) return [];
+    const routine = routineForSession(session, block);
+    if(!routine) return [];
+    let sessionWeek = Number(session.blockWeek);
+    if(!(Number.isInteger(sessionWeek) && sessionWeek > 0)){
+      sessionWeek = getBlockRoutineWeek(block, routine);
+    }
+    if(!(Number.isInteger(sessionWeek) && sessionWeek > 0)) return [];
+    if(sessionWeek !== week) return [];
+    const routineDays = [...new Set((routine.scheduledDays || [])
+      .filter(day=>Number.isInteger(day) && day>=0 && day<=6))];
+    let dayIndex = session.blockDayIndex == null ? null : Number(session.blockDayIndex);
+    if(!(Number.isInteger(dayIndex) && dayIndex>=0 && dayIndex<=6)){
+      if(!routineDays.length) dayIndex = null;
+      else {
+        const date = session.date ? new Date(`${session.date}T00:00:00`) : null;
+        if(!date || Number.isNaN(date.getTime())) return [];
+        dayIndex = (date.getDay()+6)%7;
+      }
+    }
+    if(routineDays.length ? !routineDays.includes(dayIndex) : dayIndex !== null) return [];
+    return [{session, routine, dayIndex}];
+  });
+}
+function getBlockWeekProgress(block, week){
+  const workouts = getWeekWorkouts(block, week);
+  const completedKeys = new Set();
+  getBlockWeekSessions(block, week).forEach(saved=>{
+    const workout = workouts.find(workout=>
+      !completedKeys.has(workout.key) &&
+      workout.routine.id === saved.routine.id &&
+      workout.dayIndex === saved.dayIndex
+    );
+    if(workout) completedKeys.add(workout.key);
+  });
+  return {
+    workouts:workouts.map(workout=>({...workout, completed:completedKeys.has(workout.key)})),
+    total:workouts.length,
+    completed:completedKeys.size
+  };
+}
+function getCurrentBlockWeek(block){
+  const weeks = Math.max(1, Math.min(52, Number(block.weeks) || 1));
+  let hasWorkouts = false;
+  for(let week=1; week<=weeks; week++){
+    const progress = getBlockWeekProgress(block, week);
+    if(progress.total){
+      hasWorkouts = true;
+      if(progress.completed < progress.total) return week;
+    }
+  }
+  return hasWorkouts ? weeks : 1;
+}
+function isTrainingBlockComplete(block){
+  const weeks = Math.max(1, Math.min(52, Number(block.weeks) || 1));
+  const progress = Array.from({length:weeks}, (_,index)=>getBlockWeekProgress(block,index+1));
+  return progress.every(week=>week.total===0 || week.completed>=week.total);
+}
+function getCurrentTrainingBlock(){
+  return (db.blocks || []).find(block=>!isTrainingBlockComplete(block)) || null;
+}
+function renderBlockOverview(){
+  const tabs = document.getElementById('blockTabs');
+  const weeksList = document.getElementById('blockWeeksList');
+  const blocks = db.blocks || [];
+  const currentBlock = getCurrentTrainingBlock();
+  tabs.innerHTML = '';
+  weeksList.innerHTML = '';
+  if(!blocks.length){
+    weeksList.innerHTML = `
+      <div class="empty">Create a training block to get started.</div>
+      <button class="btn-primary" onclick="createTrainingBlockFromMenu()">New block</button>`;
+    return;
+  }
+  blocks.forEach((block,index)=>{
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `training-block-tab${block.id===selectedTrainingBlockId?' active':''}`;
+    button.setAttribute('role','tab');
+    button.setAttribute('aria-selected',String(block.id===selectedTrainingBlockId));
+    button.textContent = `Block ${index+1}`;
+    button.onclick = ()=>selectTrainingBlock(block.id);
+    tabs.appendChild(button);
+  });
+  const block = blocks.find(item=>item.id===selectedTrainingBlockId) || currentBlock || blocks[0];
+  selectedTrainingBlockId = block.id;
+  const weekCount = Math.max(1,Math.min(52,Number(block.weeks)||1));
+  selectedTrainingBlockWeek = Math.max(1,Math.min(weekCount,selectedTrainingBlockWeek));
+  for(let week=1; week<=weekCount; week++){
+    const progress = getBlockWeekProgress(block,week);
+    const isCurrent = currentBlock && block.id===currentBlock.id && week===getCurrentBlockWeek(currentBlock);
+    const isComplete = progress.total>0 && progress.completed>=progress.total;
+    const countText = progress.total
+      ? `${progress.completed}/${progress.total} workouts completed`
+      : 'No workouts scheduled';
+    const segments = isCurrent && progress.total
+      ? `<div class="week-progress-segments" style="grid-template-columns:repeat(${Math.min(12,progress.total)},1fr)">${Array.from({length:Math.min(12,progress.total)},(_,index)=>`<span class="week-progress-segment${index<Math.round(progress.completed/progress.total*Math.min(12,progress.total))?' done':''}"></span>`).join('')}</div>`
+      : '';
+    const status = isComplete
+      ? '<span class="week-card-check" aria-label="Completed">✓</span>'
+      : `<span class="week-card-status">${isCurrent?'<span>CURRENT</span>':''}<span class="week-card-arrow" aria-hidden="true">›</span></span>`;
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = `week-card${isCurrent?' current':''}${isComplete?' completed':''}`;
+    card.setAttribute('aria-label',`Week ${week}, ${countText}${isCurrent?', current':''}`);
+    card.onclick = ()=>openWorkoutWeek(week);
+    card.innerHTML = `
+      <span class="week-card-info">
+        <span class="week-card-title">Week ${week}</span>
+        <span class="week-card-count">${countText}</span>
+        ${segments}
+      </span>
+      ${status}`;
+    weeksList.appendChild(card);
+  }
+}
+function selectTrainingBlock(blockId){
+  selectedTrainingBlockId = blockId;
+  const block = (db.blocks || []).find(item=>item.id === blockId);
+  selectedTrainingBlockWeek = block ? getCurrentBlockWeek(block) : 1;
+  workoutView = 'blocks';
+  renderRoutines();
+}
+function renderWorkoutWeek(){
+  const blocks = db.blocks || [];
+  const block = blocks.find(item=>item.id===selectedTrainingBlockId);
+  if(!block){ workoutView='blocks'; renderWorkoutView(); return; }
+  const blockNumber = blocks.indexOf(block)+1;
+  const progress = getBlockWeekProgress(block,selectedTrainingBlockWeek);
+  const currentBlock = getCurrentTrainingBlock();
+  const isCurrentWeek = currentBlock && currentBlock.id===block.id &&
+    getCurrentBlockWeek(block)===selectedTrainingBlockWeek;
+  const nextWorkout = isCurrentWeek ? progress.workouts.findIndex(workout=>!workout.completed) : -1;
+  document.getElementById('selectedWeekTitle').textContent = `Week ${selectedTrainingBlockWeek}`;
+  document.getElementById('selectedWeekSubtitle').textContent = `Block ${blockNumber} · Week ${selectedTrainingBlockWeek}`;
+  const list = document.getElementById('weekWorkoutList');
+  list.innerHTML = '';
+  if(!progress.workouts.length){
+    list.innerHTML = '<div class="empty">No workouts are scheduled for this week.</div>';
+    return;
+  }
+  progress.workouts.forEach((workout,index)=>{
+    const isNext = index===nextWorkout;
+    const card = document.createElement('div');
+    card.className = `week-workout-card${isNext?' next':''}`;
+    const dayLabel = workout.dayIndex===null
+      ? 'NOT SCHEDULED'
+      : `DAY ${workout.dayNumber} · ${workout.dayName.toUpperCase()}`;
+    const status = workout.completed
+      ? '<span class="week-workout-check" aria-label="Completed">✓</span>'
+      : `<button type="button" class="week-workout-start" aria-label="Start ${escapeHtml(workout.routine.name)}" onclick="startWorkout('${workout.routine.id}',${selectedTrainingBlockWeek},${workout.dayIndex===null?'null':workout.dayIndex})">▶</button>`;
+    card.innerHTML = `
+      <div class="week-workout-info">
+        <div class="week-workout-day">${dayLabel}</div>
+        <div class="week-workout-name">${escapeHtml(workout.routine.name)}</div>
+        ${isNext ? '<div class="week-workout-next-label">NEXT WORKOUT</div>' : ''}
+      </div>
+      ${status}`;
+    list.appendChild(card);
+  });
+}
+function renderRoutineLibrary(){
   const list = document.getElementById('routineList');
   list.innerHTML = '';
-  if(!db.routines.length){ list.innerHTML = '<div class="empty">Create your first routine to get started.</div>'; return; }
-  db.routines.forEach(r=>{
+  if(!db.routines.length){
+    list.innerHTML = '<div class="empty">Create your first routine to get started.</div>';
+    return;
+  }
+  db.routines.forEach(r=>list.appendChild(createRoutineCard(r)));
+}
+function createRoutineCard(r){
     const div = document.createElement('div');
     div.className = 'routine-card';
     div.innerHTML = `
       <div style="flex:1" onclick="startWorkout('${r.id}')">
-        <h3>${r.name}</h3>
+        <h3>${escapeHtml(r.name)}</h3>
         <p>${r.exercises.map(e=> typeof e==='string' ? e : e.name).join(' · ')}</p>
       </div>
       <div style="display:flex; align-items:center; gap:10px;">
@@ -2127,13 +2557,69 @@ function renderRoutines(){
         <span class="arrow" onclick="startWorkout('${r.id}')">▶</span>
       </div>
     `;
-    list.appendChild(div);
+    return div;
+}
+function escapeHtml(value){
+  return String(value ?? '').replace(/[&<>"']/g, ch=> ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+let editingBlockId = null;
+function openBlockEditor(blockId){
+  editingBlockId = blockId || null;
+  const block = editingBlockId ? (db.blocks || []).find(b=>b.id === editingBlockId) : null;
+  document.getElementById('blockEditorTitle').textContent = block ? 'Edit training block' : 'New training block';
+  document.getElementById('deleteBlockBtn').style.display = block ? 'block' : 'none';
+  document.getElementById('blockNameInput').value = block ? block.name : '';
+  document.getElementById('blockFocusInput').value = block ? (block.focus || '') : '';
+  document.getElementById('blockWeeksInput').value = block ? block.weeks : 4;
+  document.getElementById('blockStartDateInput').value = block ? (block.startDate || '') : todayStr();
+  document.getElementById('blockEditorOverlay').classList.add('active');
+}
+function saveTrainingBlock(){
+  const name = document.getElementById('blockNameInput').value.trim();
+  const weeks = Number(document.getElementById('blockWeeksInput').value);
+  const startDate = document.getElementById('blockStartDateInput').value;
+  if(!name){ toast('Give the block a name'); return; }
+  if(!Number.isInteger(weeks) || weeks < 1 || weeks > 52){ toast('Block duration must be 1–52 weeks'); return; }
+  if(startDate && !/^\d{4}-\d{2}-\d{2}$/.test(startDate)){ toast('Choose a valid start date'); return; }
+  if(!Array.isArray(db.blocks)) db.blocks = [];
+  const block = { name, focus:document.getElementById('blockFocusInput').value.trim(), weeks, startDate };
+  if(editingBlockId){
+    const existing = db.blocks.find(b=>b.id === editingBlockId);
+    if(!existing) return;
+    Object.assign(existing, block);
+  } else {
+    const newBlock = { id:uid('b'), ...block };
+    db.blocks.push(newBlock);
+    selectedTrainingBlockId = newBlock.id;
+    selectedTrainingBlockWeek = getCurrentBlockWeek(newBlock);
+    workoutView = 'blocks';
+  }
+  saveDB();
+  closeOverlay('blockEditorOverlay');
+  renderRoutines();
+  toast('Training block saved');
+}
+async function deleteTrainingBlock(blockId=editingBlockId || selectedTrainingBlockId){
+  if(!blockId) return;
+  const block = (db.blocks || []).find(b=>b.id === blockId);
+  if(!block) return;
+  if(!await appConfirm(`Delete Block ${getTrainingBlockNumber(blockId)}? Its routines will stay in your library as independent routines.`, {title:'Delete block', confirmText:'Delete'})) return;
+  db.blocks = db.blocks.filter(b=>b.id !== blockId);
+  db.routines.forEach(r=>{
+    if(r.blockId === blockId){ delete r.blockId; delete r.week; }
   });
+  if(selectedTrainingBlockId === blockId) selectedTrainingBlockId = null;
+  workoutView = 'blocks';
+  saveDB();
+  closeOverlay('blockEditorOverlay');
+  renderAll();
+  toast('Training block deleted');
 }
 
 let editingRoutineId = null;
 let routineDraftExercises = []; // [{name, sets, topSet}]
 let routineDraftSchedule = [];
+let routineDraftBlockId = '';
 
 // Backward compatible: old saved routines had exercises as an array of plain
 // name strings plus a separate topSetExercises array of names. New format
@@ -2156,6 +2642,8 @@ function openRoutineEditor(routineId){
   if(routineId){
     const r = db.routines.find(x=>x.id===routineId);
     document.getElementById('routineNameInput').value = r.name;
+    routineDraftBlockId = r.blockId || '';
+    document.getElementById('routineWeekInput').value = Number.isInteger(r.week) ? r.week : '';
     // _origName remembers the name this exercise had when the editor opened,
     // so saveRoutine() can tell "renamed an existing exercise" apart from
     // "typed a brand new exercise" and cascade the rename through history.
@@ -2163,13 +2651,24 @@ function openRoutineEditor(routineId){
     routineDraftSchedule = [...(r.scheduledDays || [])];
   } else {
     document.getElementById('routineNameInput').value = '';
+    routineDraftBlockId = '';
+    document.getElementById('routineWeekInput').value = '';
     routineDraftExercises = [];
     routineDraftSchedule = [];
   }
+  renderRoutineBlockOptions();
   renderExerciseCatalogDatalist();
   renderRoutineDraftExercises();
   renderRoutineSchedule();
   overlay.classList.add('active');
+}
+function renderRoutineBlockOptions(){
+  const select = document.getElementById('routineBlockSelect');
+  if(!select) return;
+  select.innerHTML = '<option value="">No block</option>' + (db.blocks || []).map(block=>
+    `<option value="${escapeHtml(block.id)}">${escapeHtml(block.name)}</option>`
+  ).join('');
+  select.value = routineDraftBlockId;
 }
 // The full exercise catalog is never shown as a visible list here — it only
 // powers the browser's native autofill dropdown on each name field.
@@ -2354,6 +2853,22 @@ function renderRoutineDraftExercises(){
 function saveRoutine(){
   const name = document.getElementById('routineNameInput').value.trim();
   if(!name){ toast('Give the routine a name'); return; }
+  const weekValue = document.getElementById('routineWeekInput').value.trim();
+  const routineWeek = weekValue ? Number(weekValue) : null;
+  if(routineWeek !== null && (!Number.isInteger(routineWeek) || routineWeek < 1 || routineWeek > 52)){
+    toast('Routine week must be a whole number from 1 to 52');
+    return;
+  }
+  const routineBlockId = document.getElementById('routineBlockSelect').value;
+  const routineBlock = (db.blocks || []).find(block=>block.id === routineBlockId);
+  if(routineWeek !== null && !routineBlock){
+    toast('Assign this routine to a block before choosing a week');
+    return;
+  }
+  if(routineWeek !== null && routineWeek > Number(routineBlock.weeks)){
+    toast('Routine week must be within the block duration');
+    return;
+  }
   const cleanExercises = routineDraftExercises
     .map(e=> {
       const o = { name: e.name.trim(), sets: e.sets||1, topSet: !!e.topSet, progression: !!e.topSet && !!e.progression };
@@ -2399,6 +2914,8 @@ function saveRoutine(){
     const r = db.routines.find(x=>x.id===editingRoutineId);
     const oldRoutineName = r.name;
     r.name = name; r.exercises = cleanExercises; r.scheduledDays = [...routineDraftSchedule]; delete r.topSetExercises;
+    if(routineBlockId) r.blockId = routineBlockId; else delete r.blockId;
+    if(routineWeek !== null) r.week = routineWeek; else delete r.week;
     // Cascade a routine rename into its past workouts too, same idea as
     // renameExerciseGlobally() above: history should follow the routine it
     // belongs to, not go stale with the old label. Match by routineId when
@@ -2421,7 +2938,10 @@ function saveRoutine(){
       saveActiveSession();
     }
   } else {
-    db.routines.push({ id: uid('r'), name, exercises: cleanExercises, scheduledDays: [...routineDraftSchedule] });
+    const routine = { id: uid('r'), name, exercises: cleanExercises, scheduledDays: [...routineDraftSchedule] };
+    if(routineBlockId) routine.blockId = routineBlockId;
+    if(routineWeek !== null) routine.week = routineWeek;
+    db.routines.push(routine);
   }
   saveDB();
   closeOverlay('routineEditorOverlay');
@@ -2559,19 +3079,28 @@ function renderActiveSessionBanner(){
     <div class="active-session-banner" onclick="resumeWorkout()">
       <div>
         <div class="label">Workout in progress</div>
-        <div class="name">${liveSession.routine}</div>
+        <div class="name">${escapeHtml(liveSession.routine)}</div>
+        ${liveSession.blockId && getTrainingBlockNumber(liveSession.blockId) ? `<small style="display:block; margin-top:4px;">Block ${getTrainingBlockNumber(liveSession.blockId)}${liveSession.blockWeek ? ` · Week ${liveSession.blockWeek}` : ''}</small>` : ''}
       </div>
       <div class="resume">Resume →</div>
     </div>
   `;
 }
 
-function startWorkout(routineId){
+function startWorkout(routineId, selectedWeek=null, selectedDayIndex=null){
   const r = db.routines.find(x=>x.id===routineId);
+  const block = (db.blocks || []).find(b=>b.id === r.blockId);
   const norm = normalizeRoutineExercises(r);
+  const blockWeeks = block ? Math.max(1, Math.min(52, Number(block.weeks) || 1)) : 0;
+  const blockWeek = block ? Math.max(1, Math.min(blockWeeks, Number(selectedWeek) || getCurrentBlockWeek(block))) : null;
+  const blockDayIndex = Number.isInteger(selectedDayIndex) && selectedDayIndex>=0 && selectedDayIndex<=6 ? selectedDayIndex : null;
   liveSession = {
     routine: r.name,
     routineId: r.id,
+    blockId: block ? block.id : null,
+    blockName: block ? block.name : null,
+    blockWeek,
+    blockDayIndex,
     startedAt: Date.now(),
     warmupEndedAt: null,
     focusedExerciseIndex: -1,
@@ -2655,6 +3184,13 @@ function updateWorkoutHeader(){
   const date = document.getElementById('workoutDate');
   if(clock) clock.textContent = formatWorkoutElapsed();
   if(date) date.textContent = new Date().toLocaleDateString('en-US', {weekday:'short', day:'numeric', month:'short', year:'numeric'});
+  const blockContext = document.getElementById('workoutBlockContext');
+  if(blockContext){
+    blockContext.textContent = liveSession && liveSession.blockId
+      ? `${getTrainingBlockNumber(liveSession.blockId) ? `Block ${getTrainingBlockNumber(liveSession.blockId)}` : ''}${liveSession.blockWeek ? ` · Week ${liveSession.blockWeek}` : ''}`
+      : '';
+    blockContext.hidden = !blockContext.textContent;
+  }
 
   const stats = document.getElementById('workoutExerciseStats');
   if(!stats || !liveSession || !liveSession.exercises.length) return;
@@ -3594,6 +4130,10 @@ async function finishWorkout(){
     date: todayStr(),
     routine: liveSession.routine,
     routineId: liveSession.routineId || null,
+    blockId: liveSession.blockId || null,
+    blockName: liveSession.blockName || null,
+    blockWeek: liveSession.blockWeek || null,
+    blockDayIndex: liveSession.blockDayIndex ?? null,
     durationMin,
     warmupDurationMin,
     trainingDurationMin,
@@ -3608,6 +4148,11 @@ async function finishWorkout(){
   newSession.basicsSummary = basicsSummary;
   db.sessions.push(newSession);
   saveDB();
+  const currentBlock = getCurrentTrainingBlock();
+  const displayedBlock = currentBlock || (db.blocks || []).find(block=>block.id===newSession.blockId);
+  selectedTrainingBlockId = displayedBlock ? displayedBlock.id : null;
+  selectedTrainingBlockWeek = displayedBlock ? getCurrentBlockWeek(displayedBlock) : 1;
+  workoutView = 'blocks';
 
   const newPRs = computeNewPRs(basicsSummary, prevPRs);
 
@@ -4080,6 +4625,7 @@ function renderSessions(){
         <span><b>${totalSets}</b> sets</span>
         <span><b>${Math.round(vol).toLocaleString('en-US')}</b> kg vol.</span>
         <span><b>${s.durationMin}</b> min</span>
+        ${s.blockId && getTrainingBlockNumber(s.blockId) ? `<span>Block <b>${getTrainingBlockNumber(s.blockId)}</b>${s.blockWeek ? ` · Week <b>${s.blockWeek}</b>` : ''}</span>` : ''}
       </div>
     `;
     list.appendChild(div);
@@ -4143,6 +4689,7 @@ function openSessionDetail(sessionId){
         <span><b>${s.exercises.length}</b> exercises</span>
         <span><b>${totalSets}</b> sets</span>
         <span><b>${Math.round(vol).toLocaleString('en-US')}</b> kg vol.</span>
+        ${s.blockId && getTrainingBlockNumber(s.blockId) ? `<span>Block <b>${getTrainingBlockNumber(s.blockId)}</b>${s.blockWeek ? ` · Week <b>${s.blockWeek}</b>` : ''}</span>` : ''}
       </div>
     </div>
     ${timeBreakdownCard}
@@ -4845,6 +5392,7 @@ async function restoreBackup(){
       if(!parsed.settings) parsed.settings = { restSeconds: 180 };
       if(!parsed.settings.categories) parsed.settings.categories = [];
       if(!parsed.basicAssignments) parsed.basicAssignments = {};
+      if(!Array.isArray(parsed.blocks)) parsed.blocks = [];
       migrateBasicAssignments(parsed);
       applyBarSettingsDefaults(parsed);
       db = parsed;
@@ -4860,10 +5408,11 @@ async function restoreBackup(){
 }
 
 /* ================= PROGRAMME IMPORT (JSON) ================= */
-/* Accepted shapes (all map onto db.routines, same shape saveRoutine() builds):
-   { "programme":"name", "routines":[ {...routine}, ... ] }
+/* Accepted shapes (all map onto db.blocks/db.routines):
+   { "programme":"name", "blocks":[ {...block}, ... ], "routines":[ {...routine}, ... ] }
    [ {...routine}, ... ]            or a single {...routine}
-   routine  = { "name":"Push", "days":["Mon","Thu"] | [0,3], "exercises":[ ex, ... ] }
+   block    = { "name":"Accumulation", "focus":"Volume", "weeks":4, "startDate":"YYYY-MM-DD" }
+   routine  = { "name":"Push", "block":"Accumulation", "week":2, "days":["Mon","Thu"] | [0,3], "exercises":[ ex, ... ] }
    ex       = "Bench Press"  or
               { "name":"Bench Press", "sets":4, "reps":8, "rpe":8,
                 "topSet":true, "topReps":3, "backoffSets":3,
@@ -4888,11 +5437,42 @@ function _pgBasic(v){
   if(k==='deadlift' || k==='peso muerto') return 'deadlift';
   return null;
 }
+function _pgDate(v){
+  if(typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return '';
+  const date = new Date(`${v}T00:00:00`);
+  return !Number.isNaN(date.getTime()) && localDateStr(date) === v ? v : '';
+}
 function parseProgramme(data){
+  const blockDefs = [];
+  const blockNames = new Set();
+  const addBlock = (name, source={})=>{
+    const cleanName = typeof name === 'string' ? name.trim() : '';
+    if(!cleanName) return '';
+    const key = normalizeName(cleanName);
+    if(!blockNames.has(key)){
+      const weeks = _pgNum(source.weeks, 1, 52);
+      blockDefs.push({
+        name:cleanName,
+        focus:typeof source.focus === 'string' ? source.focus.trim() : '',
+        weeks:weeks ? Math.round(weeks) : 4,
+        startDate:_pgDate(source.startDate)
+      });
+      blockNames.add(key);
+    }
+    return cleanName;
+  };
+  const declaredBlocks = data && !Array.isArray(data) && Array.isArray(data.blocks) ? data.blocks : [];
+  declaredBlocks.forEach(block=>{
+    if(typeof block === 'string') addBlock(block);
+    else if(block && typeof block.name === 'string') addBlock(block.name, block);
+  });
   let routinesRaw;
   if(Array.isArray(data)) routinesRaw = data;
   else if(data && Array.isArray(data.routines)) routinesRaw = data.routines;
   else if(data && Array.isArray(data.exercises)) routinesRaw = [data];
+  else if(declaredBlocks.length) routinesRaw = declaredBlocks.flatMap(block=>
+    block && Array.isArray(block.routines) ? block.routines.map(r=> ({...r, _blockName:block.name})) : []
+  );
   else throw new Error('No routines found');
   const progName = (data && !Array.isArray(data) && typeof data.programme === 'string') ? data.programme.trim() : '';
   const routines = [];
@@ -4926,10 +5506,26 @@ function parseProgramme(data){
     if(!exercises.length) return;
     const dayList = r.days || r.scheduledDays || [];
     const scheduledDays = [...new Set((Array.isArray(dayList) ? dayList : []).map(_pgDay).filter(d=> d!==null))].sort();
-    routines.push({ name, exercises, scheduledDays });
+    const rawBlock = r._blockName || r.block || r.blockName;
+    const blockName = typeof rawBlock === 'string' ? rawBlock.trim() : (rawBlock && typeof rawBlock.name === 'string' ? rawBlock.name.trim() : '');
+    if(blockName) addBlock(blockName);
+    const week = r.week == null ? null : Number(r.week);
+    if(week !== null && (!Number.isInteger(week) || week < 1 || week > 52)){
+      throw new Error(`Routine "${name}" week must be a whole number from 1 to 52`);
+    }
+    if(week !== null && !blockName){
+      throw new Error(`Routine "${name}" must belong to a block to specify a week`);
+    }
+    const assignedBlock = blockName && blockDefs.find(block=>normalizeName(block.name) === normalizeName(blockName));
+    if(week !== null && assignedBlock && week > assignedBlock.weeks){
+      throw new Error(`Routine "${name}" week exceeds the duration of its block`);
+    }
+    const routine = { name, exercises, scheduledDays, blockName };
+    if(week !== null) routine.week = week;
+    routines.push(routine);
   });
   if(!routines.length) throw new Error('No valid exercises found');
-  return { routines, basics };
+  return { routines, blocks:blockDefs, basics };
 }
 async function handleProgrammeFile(input){
   const file = input.files && input.files[0];
@@ -4942,17 +5538,34 @@ async function handleProgrammeFile(input){
     toast(err instanceof SyntaxError ? 'That file is not valid JSON' : `Invalid programme: ${err.message}`, 2800);
     return;
   }
-  const { routines, basics } = parsed;
+  const { routines, blocks, basics } = parsed;
   const exCount = routines.reduce((n,r)=> n + r.exercises.length, 0);
-  const summary = routines.map(r=> `${r.name} (${r.exercises.length})`).join(', ');
-  const ok = await appConfirm(`${routines.length} routine${routines.length>1?'s':''}, ${exCount} exercises: ${summary}`, { title:'Import programme', confirmText:'Import', danger:false });
+  const summary = routines.map(r=> `${r.name}${r.blockName ? ` · ${r.blockName}` : ''} (${r.exercises.length})`).join(', ');
+  const ok = await appConfirm(`${blocks.length} block${blocks.length===1?'':'s'}, ${routines.length} routine${routines.length>1?'s':''}, ${exCount} exercises: ${summary}`, { title:'Import programme', confirmText:'Import', danger:false });
   if(!ok) return;
+  const blockIdsByName = new Map();
+  blocks.forEach(block=>{
+    let finalName = block.name, n = 2;
+    while(db.blocks.some(existing=>normalizeName(existing.name) === normalizeName(finalName))) finalName = `${block.name} (${n++})`;
+    const id = uid('b');
+    db.blocks.push({ id, name:finalName, focus:block.focus, weeks:block.weeks, startDate:block.startDate });
+    blockIdsByName.set(normalizeName(block.name), id);
+  });
+  if(blocks.length){
+    selectedTrainingBlockId = blockIdsByName.get(normalizeName(blocks[0].name)) || null;
+    selectedTrainingBlockWeek = 1;
+    workoutView = 'blocks';
+  }
   routines.forEach(r=>{
     // Never overwrite: a name clash gets a numeric suffix.
     let finalName = r.name, n = 2;
     while(db.routines.some(x=> x.name.toLowerCase() === finalName.toLowerCase())) finalName = `${r.name} (${n++})`;
     r.exercises.forEach(e=>{ if(!db.exerciseCatalog.includes(e.name)) db.exerciseCatalog.push(e.name); });
-    db.routines.push({ id: uid('r'), name: finalName, exercises: r.exercises, scheduledDays: r.scheduledDays });
+    const routine = { id: uid('r'), name: finalName, exercises: r.exercises, scheduledDays: r.scheduledDays };
+    if(r.week !== undefined) routine.week = r.week;
+    const blockId = r.blockName ? blockIdsByName.get(normalizeName(r.blockName)) : null;
+    if(blockId) routine.blockId = blockId;
+    db.routines.push(routine);
   });
   Object.keys(basics).forEach(k=>{ db.basicAssignments[k] = basics[k]; });
   saveDB();
@@ -4961,16 +5574,27 @@ async function handleProgrammeFile(input){
 }
 function downloadProgrammeTemplate(){
   const tpl = {
-    programme: 'My programme',
+    blocks: [
+      { name: 'Accumulation', focus: 'Volume and technique', weeks: 4 },
+      { name: 'Intensification', focus: 'Heavier competition lifts', weeks: 3 }
+    ],
     routines: [
-      { name: 'Day 1 - Squat', days: ['Mon'], exercises: [
+      { name: 'Day 1 - Squat', block: 'Accumulation', days: ['Mon'], exercises: [
         { name: 'Squat', basic: 'squat', topSet: true, topReps: 3, backoffSets: 3, progression: true, weight: 120 },
         { name: 'Leg Press', sets: 3, reps: 10, rpe: 8, weight: 180 },
         'Leg Curl'
       ]},
-      { name: 'Day 2 - Bench', days: ['Wed'], exercises: [
+      { name: 'Day 2 - Bench', block: 'Accumulation', days: ['Wed'], exercises: [
         { name: 'Bench Press', basic: 'bench', topSet: true, topReps: 5, backoffSets: 3, weight: 90 },
         { name: 'Overhead Press', sets: 3, reps: 8 }
+      ]},
+      { name: 'Day 1 - Competition lifts', block: 'Intensification', days: ['Mon'], exercises: [
+        { name: 'Squat', basic: 'squat', topSet: true, topReps: 2, backoffSets: 2, progression: true, weight: 130 },
+        { name: 'Bench Press', basic: 'bench', topSet: true, topReps: 3, backoffSets: 2, weight: 95 }
+      ]},
+      { name: 'Day 3 - Deadlift variation', block: 'Accumulation', week: 2, days: ['Fri'], exercises: [
+        { name: 'Deadlift', basic: 'deadlift', topSet: true, topReps: 3, backoffSets: 3, progression: true, weight: 150 },
+        { name: 'Romanian Deadlift', sets: 3, reps: 8, rpe: 7 }
       ]}
     ]
   };
@@ -4984,11 +5608,21 @@ function downloadProgrammeTemplate(){
 
 /* ================= NAV / OVERLAYS ================= */
 function showScreen(id){
+  if(id === 'entrenamiento'){
+    const currentBlock = getCurrentTrainingBlock();
+    workoutView = 'blocks';
+    if(currentBlock){
+      selectedTrainingBlockId = currentBlock.id;
+      selectedTrainingBlockWeek = getCurrentBlockWeek(currentBlock);
+    }
+    closeWorkoutToolsMenu();
+  }
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
   const navButton = document.querySelector(`nav button[data-screen="${id}"]`);
   if(navButton) navButton.classList.add('active');
+  if(id === 'entrenamiento') renderRoutines();
 }
 function closeOverlay(id){ document.getElementById(id).classList.remove('active'); }
 
