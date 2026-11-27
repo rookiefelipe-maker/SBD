@@ -2628,9 +2628,9 @@ function normalizeRoutineExercises(r){
   const topNames = r.topSetExercises || [];
   return (r.exercises || []).map(e=>{
     if(typeof e === 'string'){
-      return { name: e, sets: 1, topSet: topNames.includes(e), progression: false, topReps: 1, backoffSets: 3, targetReps: null, targetRpe: null, weight: null };
+      return { name: e, sets: 1, topSet: topNames.includes(e), progression: false, topReps: 1, backoffSets: 3, targetReps: null, targetRpe: null, weight: null, setPlan:null };
     }
-    return { name: e.name, sets: e.sets || 1, topSet: !!e.topSet, progression: !!e.progression, topReps: e.topReps || 1, backoffSets: (e.backoffSets ?? 3), targetReps: e.targetReps || null, targetRpe: e.targetRpe || null, weight: e.weight || null };
+    return { name: e.name, sets: e.sets || 1, topSet: !!e.topSet, progression: !!e.progression, topReps: e.topReps || 1, backoffSets: (e.backoffSets ?? 3), targetReps: e.targetReps || null, targetRpe: e.targetRpe || null, weight: e.weight || null, setPlan:Array.isArray(e.setPlan) ? e.setPlan.map(set=>({weight:set.weight, reps:set.reps})) : null };
   });
 }
 
@@ -2869,6 +2869,7 @@ function saveRoutine(){
     toast('Routine week must be within the block duration');
     return;
   }
+  let clearedSetPlanCount = 0;
   const cleanExercises = routineDraftExercises
     .map(e=> {
       const o = { name: e.name.trim(), sets: e.sets||1, topSet: !!e.topSet, progression: !!e.topSet && !!e.progression };
@@ -2876,6 +2877,10 @@ function saveRoutine(){
       else if(e.targetReps){ o.targetReps = e.targetReps; }
       if(e.targetRpe){ o.targetRpe = e.targetRpe; }
       if(e.weight > 0){ o.weight = e.weight; }
+      if(Array.isArray(e.setPlan)){
+        if(e.setPlan.length === o.sets) o.setPlan = e.setPlan.map(set=>({weight:set.weight, reps:set.reps}));
+        else clearedSetPlanCount++;
+      }
       return o;
     })
     .filter(e=> e.name);
@@ -2949,7 +2954,9 @@ function saveRoutine(){
   renderSessions();
   renderStatGrid();
   renderSBD();
-  toast(renameCount ? 'Routine saved · renamed in this routine\'s past workouts' : 'Routine saved');
+  toast(clearedSetPlanCount
+    ? 'Routine saved · per-set plan cleared because the set count changed'
+    : (renameCount ? 'Routine saved · renamed in this routine\'s past workouts' : 'Routine saved'));
 }
 
 /* Renames an exercise's history — every past workout, the in-progress
@@ -3107,11 +3114,16 @@ function startWorkout(routineId, selectedWeek=null, selectedDayIndex=null){
     exercises: norm.map(ex=> {
       // Basic lift + Top Set: start with the top set only; backoffs are
       // generated after it is completed.
-      const basicTop = !!(ex.topSet && basicKeyForExercise(ex.name));
-      const n = basicTop ? 1 : Math.max(1, ex.sets||1);
+      const setPlan = Array.isArray(ex.setPlan) && ex.setPlan.length ? ex.setPlan : null;
+      const basicTop = !setPlan && !!(ex.topSet && basicKeyForExercise(ex.name));
+      const n = setPlan ? setPlan.length : (basicTop ? 1 : Math.max(1, ex.sets||1));
       return {
         name: ex.name,
-        sets: Array.from({length: n}, (_,i)=> ({ w: ex.weight > 0 ? ex.weight : null, r: basicTop ? (ex.topReps||1) : (ex.targetReps ?? null), isTopSet: !!(ex.topSet && i===0) })),
+        sets: Array.from({length: n}, (_,i)=> ({
+          w: setPlan ? setPlan[i].weight : (ex.weight > 0 ? ex.weight : null),
+          r: setPlan ? setPlan[i].reps : (basicTop ? (ex.topReps||1) : (ex.targetReps ?? null)),
+          isTopSet: !!(ex.topSet && i===0)
+        })),
         weight: ex.weight || null,
         targetReps: ex.targetReps || null,
         targetRpe: ex.targetRpe || null,
@@ -5416,7 +5428,8 @@ async function restoreBackup(){
    ex       = "Bench Press"  or
               { "name":"Bench Press", "sets":4, "reps":8, "rpe":8,
                 "topSet":true, "topReps":3, "backoffSets":3,
-                "progression":false, "basic":"bench", "weight":100 }
+                "progression":false, "basic":"bench", "weight":100,
+                "setPlan":[{"weight":100,"reps":8}, ...] }
    Days: 0=Mon ... 6=Sun. basic: "squat" | "bench" | "deadlift". */
 const _PG_DAYS = { mon:0, monday:0, lun:0, lunes:0, tue:1, tuesday:1, mar:1, martes:1, wed:2, wednesday:2, mie:2, miercoles:2,
   thu:3, thursday:3, jue:3, jueves:3, fri:4, friday:4, vie:4, viernes:4, sat:5, saturday:5, sab:5, sabado:5, sun:6, sunday:6, dom:6, domingo:6 };
@@ -5490,7 +5503,36 @@ function parseProgramme(data){
       let topSet = !!src.topSet;
       if(topSet && topCount >= 2) topSet = false; // same cap as the editor
       if(topSet) topCount++;
-      const o = { name: exName, sets: Math.round(_pgNum(src.sets, 1, 99) || 1), topSet, progression: topSet && !!src.progression };
+      const hasSetPlan = src.setPlan !== undefined;
+      if(hasSetPlan && !Array.isArray(src.setPlan)){
+        throw new Error(`Exercise "${exName}" setPlan must be an array`);
+      }
+      let sets = Math.round(_pgNum(src.sets, 1, 99) || 1);
+      if(hasSetPlan){
+        if(src.setPlan.length < 1 || src.setPlan.length > 99){
+          throw new Error(`Exercise "${exName}" setPlan must contain 1 to 99 sets`);
+        }
+        const declaredSets = src.sets == null ? null : _pgNum(src.sets, 1, 99);
+        if(src.sets != null && (!declaredSets || Math.round(declaredSets) !== src.setPlan.length)){
+          throw new Error(`Exercise "${exName}" sets must match the setPlan length`);
+        }
+        sets = src.setPlan.length;
+      }
+      const o = { name: exName, sets, topSet, progression: topSet && !!src.progression };
+      if(hasSetPlan){
+        o.setPlan = src.setPlan.map((set,index)=>{
+          if(!set || typeof set !== 'object' || Array.isArray(set)){
+            throw new Error(`Exercise "${exName}" setPlan entry ${index+1} must be an object`);
+          }
+          const weight = Number(set.weight);
+          const setReps = Number(set.reps);
+          if(!Number.isFinite(weight) || weight < 0.1 || weight > 1000 ||
+             !Number.isInteger(setReps) || setReps < 1 || setReps > 99){
+            throw new Error(`Exercise "${exName}" setPlan entry ${index+1} needs a weight from 0.1 to 1000 and whole-number reps from 1 to 99`);
+          }
+          return { weight:Math.round(weight*100)/100, reps:setReps };
+        });
+      }
       const reps = _pgNum(src.reps ?? src.targetReps, 1, 99);
       const rpe = _pgNum(src.rpe ?? src.targetRpe, 1, 10);
       if(topSet && basic){
@@ -5581,7 +5623,11 @@ function downloadProgrammeTemplate(){
     routines: [
       { name: 'Day 1 - Squat', block: 'Accumulation', days: ['Mon'], exercises: [
         { name: 'Squat', basic: 'squat', topSet: true, topReps: 3, backoffSets: 3, progression: true, weight: 120 },
-        { name: 'Leg Press', sets: 3, reps: 10, rpe: 8, weight: 180 },
+        { name: 'Leg Press', sets: 3, rpe: 8, setPlan: [
+          { weight: 180, reps: 10 },
+          { weight: 180, reps: 10 },
+          { weight: 160, reps: 12 }
+        ]},
         'Leg Curl'
       ]},
       { name: 'Day 2 - Bench', block: 'Accumulation', days: ['Wed'], exercises: [
