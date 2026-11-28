@@ -138,9 +138,8 @@
   .week-day .day-num{font-size:20px; margin:5px 0 7px; font-weight:700;}
   .week-day.today .day-num{color:var(--red);}
   .week-day .day-mark{height:7px; width:7px; margin:0 auto 7px; border-radius:50%; background:var(--line);}
+  .week-day.planned .day-mark{background:var(--red);}
   .week-day.done .day-mark{background:var(--green);}
-  .week-day .day-label{font-size:9px; color:var(--grey); min-height:22px; line-height:1.15; overflow-wrap:anywhere;}
-  .week-day.done .day-label{color:var(--green);}
   .week-today-plan{border-top:1px solid var(--line); margin-top:14px; padding-top:12px; font-size:11px; color:var(--grey);}
   .week-today-plan strong{display:block; color:var(--white); font-size:16px; margin-top:3px;}
   .schedule-days{display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-top:8px;}
@@ -2175,14 +2174,15 @@ function renderWeeklyDashboard(){
   const labels = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
   const plannedByDay = day => {
     const currentBlock = getCurrentTrainingBlock();
-    const planned = db.routines.filter(routine=>
-      !(db.blocks || []).some(block=>block.id === routine.blockId) &&
-      (routine.scheduledDays || []).includes(day)
-    );
+    const planned = [];
     if(currentBlock){
       planned.push(...getBlockWeekRoutines(currentBlock, getCurrentBlockWeek(currentBlock))
         .filter(routine=>(routine.scheduledDays || []).includes(day)));
     }
+    planned.push(...db.routines.filter(routine=>
+      !(db.blocks || []).some(block=>block.id === routine.blockId) &&
+      (routine.scheduledDays || []).includes(day)
+    ));
     return planned.map(routine=>routine.name);
   };
   if(weekDays){
@@ -2194,8 +2194,13 @@ function renderWeeklyDashboard(){
       const completed = sessionsByDate[dateStr] || [];
       const planned = plannedByDay(day);
       const cell = document.createElement('div');
-      cell.className = 'week-day' + (dateStr===todayStr() ? ' today' : '') + (completed.length ? ' done' : '');
-      cell.innerHTML = `<div class="dow">${labels[day]}</div><div class="day-num">${date.getDate()}</div><div class="day-mark"></div><div class="day-label">${completed.length ? completed.map(escapeHtml).join(', ') : planned.length ? planned.join(', ') : 'Rest'}</div>`;
+      cell.className = 'week-day' + (dateStr===todayStr() ? ' today' : '') +
+        (completed.length ? ' done' : (planned.length ? ' planned' : ''));
+      const dayStatus = completed.length ? 'Workout completed' : (planned.length ? 'Workout planned' : 'Rest day');
+      cell.title = dayStatus;
+      cell.setAttribute('role','group');
+      cell.setAttribute('aria-label',`${labels[day]} ${date.getDate()}, ${dayStatus}`);
+      cell.innerHTML = `<div class="dow">${labels[day]}</div><div class="day-num">${date.getDate()}</div><div class="day-mark" aria-hidden="true"></div>`;
       weekDays.appendChild(cell);
     }
   }
@@ -2209,9 +2214,9 @@ function renderWeeklyDashboard(){
   const planEl = document.getElementById('weekTodayPlan');
   if(planEl){
     planEl.innerHTML = todayCompleted.length
-      ? `Today · completed<strong>${todayCompleted.map(escapeHtml).join(', ')}</strong>`
+      ? `Today · completed<strong>${escapeHtml(todayCompleted[todayCompleted.length-1])}</strong>`
       : todayPlans.length
-        ? `Today · planned<strong>${todayPlans.join(', ')}</strong>`
+        ? `Today · planned<strong>${escapeHtml(todayPlans[0])}</strong>`
         : 'Today · rest day<strong>No workout scheduled</strong>';
   }
 }
